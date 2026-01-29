@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
-import { UserPlus, UserMinus, Users, FileText, Heart, Lock, Type, BookOpen } from 'lucide-react';
+import { UserPlus, UserMinus, FileText, Heart, Lock, Type, BookOpen } from 'lucide-react';
 import PostCard from '../components/PostCard';
 import {
   userApi,
@@ -11,7 +11,7 @@ import {
   bookmarkApi,
   subscriptionApi,
 } from '../services/api';
-import type { User, Post, PostType } from '../types';
+import type { User, Post } from '../types';
 
 type Tab = 'posts' | 'appreciated';
 type PostTypeFilter = 'all' | 'line' | 'page' | 'book';

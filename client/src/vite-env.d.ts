@@ -7,3 +7,12 @@ interface ImportMetaEnv {
 interface ImportMeta {
   readonly env: ImportMetaEnv;
 }
+
+// Global Clerk object
+declare global {
+  interface Window {
+    Clerk?: {
+      signOut: () => Promise<void>;
+    };
+  }
+}

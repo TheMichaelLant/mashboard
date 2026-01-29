@@ -12,6 +12,7 @@ import Settings from './pages/Settings';
 import SignInPage from './pages/SignIn';
 import SignUpPage from './pages/SignUp';
 import Onboarding from './pages/Onboarding';
+import { HighlightModeProvider } from './contexts/HighlightModeContext';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return (
@@ -26,6 +27,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
+    <HighlightModeProvider>
     <Routes>
       <Route path="/sign-in/*" element={<SignInPage />} />
       <Route path="/sign-up/*" element={<SignUpPage />} />
@@ -93,5 +95,6 @@ export default function App() {
         />
       </Route>
     </Routes>
+    </HighlightModeProvider>
   );
 }

@@ -132,7 +132,7 @@ export default function RichTextEditor({
 
               {/* Font Size */}
               <select
-                onChange={(e) => {
+                onChange={() => {
                   // Note: TipTap doesn't have native font-size, using custom styles
                   editor.chain().focus().run();
                 }}

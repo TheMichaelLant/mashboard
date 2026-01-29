@@ -114,25 +114,25 @@ export default function Settings() {
 
   if (loading) {
     return (
-      <div className="max-w-3xl mx-auto animate-pulse">
-        <div className="h-8 bg-paper-200 rounded w-1/4 mb-8" />
+      <div className="max-w-3xl mx-auto px-8 py-12 animate-pulse">
+        <div className="h-8 bg-ink-700 rounded w-1/4 mb-8" />
         <div className="space-y-4">
-          <div className="h-12 bg-paper-200 rounded" />
-          <div className="h-12 bg-paper-200 rounded" />
-          <div className="h-24 bg-paper-200 rounded" />
+          <div className="h-12 bg-ink-700 rounded" />
+          <div className="h-12 bg-ink-700 rounded" />
+          <div className="h-24 bg-ink-700 rounded" />
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto">
-      <h1 className="text-3xl font-display font-bold text-ink-900 mb-6">
+    <div className="max-w-3xl mx-auto px-8 py-12">
+      <h1 className="text-4xl font-display font-bold text-ink-100 mb-8">
         Settings
       </h1>
 
       {/* Tabs */}
-      <div className="flex items-center space-x-1 border-b border-paper-100 mb-6">
+      <div className="flex items-center space-x-1 border-b border-ink-700 mb-8">
         <TabButton
           active={activeTab === 'profile'}
           onClick={() => setActiveTab('profile')}
@@ -164,25 +164,25 @@ export default function Settings() {
                 className="w-20 h-20 rounded-full object-cover"
               />
             ) : (
-              <div className="w-20 h-20 rounded-full bg-ink-200 flex items-center justify-center">
-                <span className="text-ink-600 font-bold text-2xl">
+              <div className="w-20 h-20 rounded-full bg-ink-700 flex items-center justify-center">
+                <span className="text-ink-400 font-bold text-2xl">
                   {displayName.charAt(0) || '?'}
                 </span>
               </div>
             )}
             <div>
-              <p className="text-sm text-ink-500">
+              <p className="text-sm text-ink-400">
                 Profile picture is managed through Clerk
               </p>
             </div>
           </div>
 
           <div>
-            <label className="text-sm font-medium text-ink-700 block mb-2">
+            <label className="text-sm font-medium text-ink-300 block mb-2">
               Username
             </label>
             <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-400">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500">
                 @
               </span>
               <input
@@ -197,12 +197,12 @@ export default function Settings() {
               />
             </div>
             {usernameError && (
-              <p className="text-sm text-red-500 mt-1">{usernameError}</p>
+              <p className="text-sm text-red-400 mt-1">{usernameError}</p>
             )}
           </div>
 
           <div>
-            <label className="text-sm font-medium text-ink-700 block mb-2">
+            <label className="text-sm font-medium text-ink-300 block mb-2">
               Display Name
             </label>
             <input
@@ -215,7 +215,7 @@ export default function Settings() {
           </div>
 
           <div>
-            <label className="text-sm font-medium text-ink-700 block mb-2">
+            <label className="text-sm font-medium text-ink-300 block mb-2">
               Bio
             </label>
             <textarea
@@ -250,27 +250,27 @@ export default function Settings() {
       {activeTab === 'creator' && (
         <div className="card p-6 space-y-6">
           <div>
-            <h2 className="text-xl font-heading font-semibold text-ink-900 mb-2">
+            <h2 className="text-xl font-heading font-semibold text-ink-100 mb-2">
               Creator Settings
             </h2>
-            <p className="text-ink-600">
+            <p className="text-ink-400">
               Enable subscriptions to monetize your content. Subscribers get access to your paid posts.
             </p>
           </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <label className="font-medium text-ink-700">
+              <label className="font-medium text-ink-200">
                 Accept Subscriptions
               </label>
-              <p className="text-sm text-ink-500">
+              <p className="text-sm text-ink-400">
                 Allow readers to subscribe to your content
               </p>
             </div>
             <button
               onClick={() => setAcceptsSubscriptions(!acceptsSubscriptions)}
               className={`w-12 h-6 rounded-full transition-colors ${
-                acceptsSubscriptions ? 'bg-ink-900' : 'bg-paper-300'
+                acceptsSubscriptions ? 'bg-gold-600' : 'bg-ink-600'
               }`}
             >
               <div
@@ -283,7 +283,7 @@ export default function Settings() {
 
           {acceptsSubscriptions && (
             <div>
-              <label className="text-sm font-medium text-ink-700 block mb-2">
+              <label className="text-sm font-medium text-ink-300 block mb-2">
                 Monthly Subscription Price ($)
               </label>
               <input
@@ -324,33 +324,33 @@ export default function Settings() {
       {activeTab === 'subscriptions' && (
         <div className="card p-6 space-y-6">
           <div>
-            <h2 className="text-xl font-heading font-semibold text-ink-900 mb-2">
+            <h2 className="text-xl font-heading font-semibold text-ink-100 mb-2">
               Account Settings
             </h2>
-            <p className="text-ink-600">
+            <p className="text-ink-400">
               Manage your account security and preferences.
             </p>
           </div>
 
-          <div className="border-t border-paper-100 pt-6">
-            <h3 className="font-medium text-ink-700 mb-2">Email</h3>
-            <p className="text-ink-900">{clerkUser?.primaryEmailAddress?.emailAddress}</p>
+          <div className="border-t border-ink-700 pt-6">
+            <h3 className="font-medium text-ink-200 mb-2">Email</h3>
+            <p className="text-ink-100">{clerkUser?.primaryEmailAddress?.emailAddress}</p>
             <p className="text-sm text-ink-500 mt-1">
               Managed through Clerk authentication
             </p>
           </div>
 
-          <div className="border-t border-paper-100 pt-6">
-            <h3 className="font-medium text-ink-700 mb-2">Security</h3>
-            <p className="text-sm text-ink-600">
+          <div className="border-t border-ink-700 pt-6">
+            <h3 className="font-medium text-ink-200 mb-2">Security</h3>
+            <p className="text-sm text-ink-400">
               Account security settings are managed through Clerk.
               Click the user menu in the top right to access security settings.
             </p>
           </div>
 
-          <div className="border-t border-paper-100 pt-6">
-            <h3 className="font-medium text-red-600 mb-2">Danger Zone</h3>
-            <p className="text-sm text-ink-600 mb-4">
+          <div className="border-t border-ink-700 pt-6">
+            <h3 className="font-medium text-red-400 mb-2">Danger Zone</h3>
+            <p className="text-sm text-ink-400 mb-4">
               Deleting your account will remove all your posts, bookmarks, and data permanently.
             </p>
             <button className="btn bg-red-600 text-white hover:bg-red-700">
@@ -376,8 +376,8 @@ function TabButton({ active, onClick, icon: Icon, label }: TabButtonProps) {
       onClick={onClick}
       className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition-colors ${
         active
-          ? 'border-ink-900 text-ink-900'
-          : 'border-transparent text-ink-500 hover:text-ink-700'
+          ? 'border-gold-600 text-gold-600'
+          : 'border-transparent text-ink-400 hover:text-ink-200'
       }`}
     >
       <Icon size={18} />

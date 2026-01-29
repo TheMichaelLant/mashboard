@@ -3,26 +3,34 @@
 @tailwind utilities;
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-paper-50 text-ink-900 antialiased;
+    @apply bg-ink-900 text-ink-100 antialiased;
   }
 }
 
 @layer components {
   .btn {
-    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-lg font-medium transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-ink-900;
   }
 
   .btn-primary {
-    @apply bg-ink-900 text-paper-50 hover:bg-ink-800 focus:ring-ink-500;
+    @apply bg-gold-600 text-ink-950 hover:bg-gold-500 focus:ring-gold-500;
   }
 
   .btn-secondary {
-    @apply bg-paper-200 text-ink-900 hover:bg-paper-300 focus:ring-paper-400;
+    @apply bg-ink-800 text-ink-100 hover:bg-ink-700 focus:ring-ink-500;
   }
 
   .btn-ghost {
-    @apply bg-transparent text-ink-700 hover:bg-paper-100 focus:ring-ink-300;
+    @apply bg-transparent text-ink-300 hover:text-ink-100 hover:bg-ink-800 focus:ring-ink-500;
+  }
+
+  .btn-outline {
+    @apply border border-ink-600 text-ink-200 hover:border-ink-400 hover:text-ink-100 focus:ring-ink-500;
   }
 
   .btn-sm {
@@ -34,11 +42,35 @@
   }
 
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-paper-100;
+    @apply bg-ink-800/50 rounded-xl border border-ink-700/50;
   }
 
   .input {
-    @apply w-full px-4 py-2 bg-white border border-paper-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ink-200 focus:border-ink-400 transition-colors;
+    @apply w-full px-4 py-2 bg-ink-800 border border-ink-700 rounded-lg text-ink-100 placeholder-ink-500 focus:outline-none focus:ring-2 focus:ring-gold-600/50 focus:border-gold-600 transition-colors;
+  }
+
+  /* Gold accent link style */
+  .link-gold {
+    @apply text-gold-600 hover:text-gold-500 transition-colors;
+  }
+
+  /* Vertical text for navigation */
+  .vertical-text {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  /* Snap scroll container */
+  .snap-container {
+    @apply h-screen overflow-y-scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .snap-item {
+    @apply min-h-screen;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
   }
 }
 
@@ -115,6 +147,17 @@
   @apply bg-yellow-200 rounded px-0.5;
 }
 
+/* User highlight mark in post content */
+.highlight-mark {
+  @apply bg-gold-600/30 text-gold-200 rounded px-0.5 py-0.5;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.highlight-mark:hover {
+  @apply bg-gold-600/50;
+}
+
 /* Typography presets */
 .font-preset-classic {
   font-family: 'Playfair Display', serif;
@@ -146,13 +189,13 @@
 }
 
 ::-webkit-scrollbar-track {
-  @apply bg-paper-100;
+  @apply bg-ink-800;
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply bg-ink-300 rounded-full;
+  @apply bg-ink-600 rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-ink-400;
+  @apply bg-ink-500;
 }

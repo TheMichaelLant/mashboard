@@ -93,14 +93,14 @@ export default function Library() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto px-8 py-12">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-display font-bold text-ink-900">Library</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-4xl font-display font-bold text-ink-100">Library</h1>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center space-x-1 border-b border-paper-100 mb-6">
+      <div className="flex items-center space-x-1 border-b border-ink-700 mb-8">
         <TabButton
           active={activeTab === 'bookmarks'}
           onClick={() => setActiveTab('bookmarks')}
@@ -129,8 +129,8 @@ export default function Library() {
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
             <div key={i} className="card p-6 animate-pulse">
-              <div className="h-4 bg-paper-200 rounded w-3/4 mb-2" />
-              <div className="h-4 bg-paper-200 rounded w-1/2" />
+              <div className="h-4 bg-ink-700 rounded w-3/4 mb-2" />
+              <div className="h-4 bg-ink-700 rounded w-1/2" />
             </div>
           ))}
         </div>
@@ -159,12 +159,13 @@ export default function Library() {
               <div key={book.id} className="relative">
                 <PostCard
                   post={book}
+                  variant="list"
                   onAppreciate={handleAppreciate}
                   onBookmark={() => handleRemoveArchive(book.id)}
                 />
                 <button
                   onClick={() => handleRemoveArchive(book.id)}
-                  className="absolute top-4 right-4 p-2 rounded-lg bg-white shadow hover:bg-red-50 text-ink-400 hover:text-red-500"
+                  className="absolute top-4 right-4 p-2 rounded-lg bg-ink-800 hover:bg-red-900/50 text-ink-400 hover:text-red-400 transition-colors"
                   title="Remove from archives"
                 >
                   <Trash2 size={16} />
@@ -185,12 +186,13 @@ export default function Library() {
             <div key={post.id} className="relative">
               <PostCard
                 post={post}
+                variant="list"
                 onAppreciate={handleAppreciate}
                 onBookmark={() => handleRemoveBookmark(post.id)}
               />
               <button
                 onClick={() => handleRemoveBookmark(post.id)}
-                className="absolute top-4 right-4 p-2 rounded-lg bg-white shadow hover:bg-red-50 text-ink-400 hover:text-red-500"
+                className="absolute top-4 right-4 p-2 rounded-lg bg-ink-800 hover:bg-red-900/50 text-ink-400 hover:text-red-400 transition-colors"
                 title="Remove bookmark"
               >
                 <Trash2 size={16} />
@@ -223,14 +225,14 @@ function TabButton({ active, onClick, icon: Icon, label, count }: TabButtonProps
       onClick={onClick}
       className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition-colors ${
         active
-          ? 'border-ink-900 text-ink-900'
-          : 'border-transparent text-ink-500 hover:text-ink-700'
+          ? 'border-gold-600 text-gold-600'
+          : 'border-transparent text-ink-400 hover:text-ink-200'
       }`}
     >
       <Icon size={18} />
       <span className="font-medium">{label}</span>
       {count !== undefined && count > 0 && (
-        <span className="text-xs bg-paper-200 px-2 py-0.5 rounded-full">
+        <span className="text-xs bg-ink-700 px-2 py-0.5 rounded-full">
           {count}
         </span>
       )}
@@ -249,25 +251,25 @@ function HighlightCard({ highlight, onRemove }: HighlightCardProps) {
       <div className="flex items-start justify-between mb-3">
         <Link
           to={`/post/${highlight.postId}`}
-          className="text-sm text-ink-500 hover:text-ink-700"
+          className="text-sm text-ink-400 hover:text-gold-600 transition-colors"
         >
           {highlight.post?.title || 'Untitled post'}
         </Link>
         <button
           onClick={() => onRemove(highlight.id)}
-          className="p-1 rounded hover:bg-red-50 text-ink-400 hover:text-red-500"
+          className="p-1 rounded hover:bg-red-900/50 text-ink-400 hover:text-red-400 transition-colors"
           title="Remove highlight"
         >
           <Trash2 size={16} />
         </button>
       </div>
-      <blockquote className="bg-yellow-50 border-l-4 border-yellow-300 p-4 rounded-r-lg">
-        <p className="text-ink-800 italic">"{highlight.selectedText}"</p>
+      <blockquote className="bg-gold-900/20 border-l-4 border-gold-600 p-4 rounded-r-lg">
+        <p className="text-ink-200 italic">"{highlight.selectedText}"</p>
       </blockquote>
       {highlight.note && (
-        <p className="text-ink-600 text-sm mt-3">{highlight.note}</p>
+        <p className="text-ink-400 text-sm mt-3">{highlight.note}</p>
       )}
-      <p className="text-xs text-ink-400 mt-2">
+      <p className="text-xs text-ink-500 mt-2">
         {new Date(highlight.createdAt).toLocaleDateString()}
       </p>
     </div>
@@ -283,13 +285,13 @@ interface EmptyStateProps {
 function EmptyState({ icon: Icon, title, description }: EmptyStateProps) {
   return (
     <div className="card p-12 text-center">
-      <div className="w-16 h-16 rounded-full bg-paper-100 flex items-center justify-center mx-auto mb-4">
-        <Icon className="text-ink-400" size={32} />
+      <div className="w-16 h-16 rounded-full bg-ink-800 flex items-center justify-center mx-auto mb-4">
+        <Icon className="text-ink-500" size={32} />
       </div>
-      <h2 className="text-xl font-display font-bold text-ink-900 mb-2">
+      <h2 className="text-xl font-display font-bold text-ink-100 mb-2">
         {title}
       </h2>
-      <p className="text-ink-600 mb-6">{description}</p>
+      <p className="text-ink-400 mb-6">{description}</p>
       <Link to="/discover" className="btn btn-primary">
         Discover Content
       </Link>

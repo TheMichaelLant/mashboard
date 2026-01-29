@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Type, FileText, BookOpen, Plus, Trash2, GripVertical, Lock, Save } from 'lucide-react';
 import RichTextEditor from '../components/RichTextEditor';
 import { postApi, categoryApi } from '../services/api';
-import type { PostType, Category, Post } from '../types';
+import type { PostType, Category } from '../types';
 
 interface ChapterData {
   id?: number;

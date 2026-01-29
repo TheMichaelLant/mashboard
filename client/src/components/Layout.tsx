@@ -1,205 +1,109 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { SignedIn, SignedOut, UserButton } from '@clerk/clerk-react';
-import {
-  Home,
-  Compass,
-  PenTool,
-  Rss,
-  Library,
-  Settings,
-  Menu,
-  X,
-} from 'lucide-react';
-import { useState } from 'react';
+import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
+import { Rss, Bookmark, User } from 'lucide-react';
+import FloatingToolbar from './FloatingToolbar';
 
 const navItems = [
-  { path: '/', icon: Home, label: 'Home', public: true },
-  { path: '/discover', icon: Compass, label: 'Discover', public: true },
   { path: '/feed', icon: Rss, label: 'Feed', public: false },
-  { path: '/write', icon: PenTool, label: 'Write', public: false },
-  { path: '/library', icon: Library, label: 'Library', public: false },
-  { path: '/settings', icon: Settings, label: 'Settings', public: false },
+  { path: '/library', icon: Bookmark, label: 'Bookmarks', public: false },
+  { path: '/settings', icon: User, label: 'Account', public: false },
 ];
 
 export default function Layout() {
   const location = useLocation();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user } = useUser();
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
-    <div className="min-h-screen bg-paper-50">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-paper-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
-            <Link to="/" className="flex items-center space-x-2">
-              <span className="text-2xl font-display font-bold text-ink-900">
-                Mashboard
-              </span>
-            </Link>
+    <div className="min-h-screen flex">
+      {/* Left Sidebar - Vertical Navigation */}
+      <aside className="fixed left-0 top-0 h-full w-20 flex flex-col items-center py-8 z-50">
+        {/* User Profile */}
+        <SignedIn>
+          <div className="mb-8">
+            {user?.imageUrl ? (
+              <img
+                src={user.imageUrl}
+                alt={user.fullName || 'User'}
+                className="w-12 h-12 rounded-full object-cover border-2 border-ink-700"
+              />
+            ) : (
+              <div className="w-12 h-12 rounded-full bg-ink-700 flex items-center justify-center">
+                <User size={24} className="text-ink-300" />
+              </div>
+            )}
+          </div>
+          {/* User name - vertical */}
+          <div className="vertical-text text-ink-400 text-sm tracking-wider mb-auto">
+            {user?.firstName} {user?.lastName}
+          </div>
+        </SignedIn>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-1">
-              <SignedIn>
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-ink-900 text-paper-50'
-                          : 'text-ink-600 hover:bg-paper-100'
-                      }`}
-                    >
-                      <Icon size={18} />
-                      <span className="font-medium">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </SignedIn>
-              <SignedOut>
-                {navItems
-                  .filter((item) => item.public)
-                  .map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-colors ${
-                          isActive
-                            ? 'bg-ink-900 text-paper-50'
-                            : 'text-ink-600 hover:bg-paper-100'
-                        }`}
-                      >
-                        <Icon size={18} />
-                        <span className="font-medium">{item.label}</span>
-                      </Link>
-                    );
-                  })}
-              </SignedOut>
-            </nav>
-
-            {/* Auth Section */}
-            <div className="flex items-center space-x-4">
-              <SignedIn>
-                <UserButton
-                  afterSignOutUrl="/"
-                  appearance={{
-                    elements: {
-                      avatarBox: 'w-10 h-10',
-                    },
-                  }}
-                />
-              </SignedIn>
-              <SignedOut>
-                <Link to="/sign-in" className="btn btn-ghost btn-sm">
-                  Sign In
-                </Link>
-                <Link to="/sign-up" className="btn btn-primary btn-sm">
-                  Get Started
-                </Link>
-              </SignedOut>
-
-              {/* Mobile menu button */}
-              <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="md:hidden p-2 rounded-lg hover:bg-paper-100"
-              >
-                {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
-              </button>
+        <SignedOut>
+          <div className="mb-8">
+            <div className="w-12 h-12 rounded-full bg-ink-700 flex items-center justify-center">
+              <User size={24} className="text-ink-300" />
             </div>
           </div>
-        </div>
+        </SignedOut>
 
-        {/* Mobile Navigation */}
-        {mobileMenuOpen && (
-          <div className="md:hidden border-t border-paper-100">
-            <nav className="px-4 py-2 space-y-1">
-              <SignedIn>
-                {navItems.map((item) => {
-                  const Icon = item.icon;
-                  const isActive = location.pathname === item.path;
-                  return (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={() => setMobileMenuOpen(false)}
-                      className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-ink-900 text-paper-50'
-                          : 'text-ink-600 hover:bg-paper-100'
-                      }`}
-                    >
-                      <Icon size={20} />
-                      <span className="font-medium">{item.label}</span>
-                    </Link>
-                  );
-                })}
-              </SignedIn>
-              <SignedOut>
-                {navItems
-                  .filter((item) => item.public)
-                  .map((item) => {
-                    const Icon = item.icon;
-                    const isActive = location.pathname === item.path;
-                    return (
-                      <Link
-                        key={item.path}
-                        to={item.path}
-                        onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                          isActive
-                            ? 'bg-ink-900 text-paper-50'
-                            : 'text-ink-600 hover:bg-paper-100'
-                        }`}
-                      >
-                        <Icon size={20} />
-                        <span className="font-medium">{item.label}</span>
-                      </Link>
-                    );
-                  })}
-              </SignedOut>
-            </nav>
-          </div>
-        )}
-      </header>
+        {/* Navigation Items */}
+        <nav className="flex flex-col items-center space-y-2 mt-auto">
+          <SignedIn>
+            {navItems.map((item) => {
+              const isActive = location.pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`vertical-text py-4 px-2 text-sm tracking-wider transition-colors ${
+                    isActive
+                      ? 'text-gold-600'
+                      : 'text-ink-400 hover:text-ink-200'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <Link
+              to="/sign-in"
+              onClick={() => (window as Window & { Clerk?: { signOut: () => void } }).Clerk?.signOut()}
+              className="vertical-text py-4 px-2 text-sm tracking-wider text-ink-400 hover:text-ink-200 transition-colors"
+            >
+              Sign Out
+            </Link>
+          </SignedIn>
+
+          <SignedOut>
+            <Link
+              to="/sign-in"
+              className="vertical-text py-4 px-2 text-sm tracking-wider text-ink-400 hover:text-gold-600 transition-colors"
+            >
+              Sign In
+            </Link>
+          </SignedOut>
+        </nav>
+      </aside>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 ml-20 min-h-screen">
         <Outlet />
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-paper-100 mt-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
-            <div className="flex items-center space-x-2">
-              <span className="font-display font-bold text-ink-700">
-                Mashboard
-              </span>
-              <span className="text-ink-400">
-                &copy; {new Date().getFullYear()}
-              </span>
-            </div>
-            <div className="flex items-center space-x-6 text-sm text-ink-500">
-              <Link to="/about" className="hover:text-ink-700">
-                About
-              </Link>
-              <Link to="/terms" className="hover:text-ink-700">
-                Terms
-              </Link>
-              <Link to="/privacy" className="hover:text-ink-700">
-                Privacy
-              </Link>
-            </div>
-          </div>
-        </div>
-      </footer>
+      {/* Floating Toolbar - Right Side */}
+      <FloatingToolbar />
+
+      {/* Bottom Left - Top Button */}
+      <button
+        onClick={scrollToTop}
+        className="fixed bottom-8 left-8 px-4 py-2 border border-ink-600 text-ink-300 text-sm hover:border-ink-400 hover:text-ink-100 transition-colors"
+      >
+        Top
+      </button>
     </div>
   );
 }

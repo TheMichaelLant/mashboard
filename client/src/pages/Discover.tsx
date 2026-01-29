@@ -17,7 +17,7 @@ export default function Discover() {
   const [activeTab, setActiveTab] = useState<Tab>('trending');
   const [typeFilter, setTypeFilter] = useState<PostTypeFilter>('all');
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '');
-  const [isSearching, setIsSearching] = useState(false);
+  const [_isSearching, setIsSearching] = useState(false);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [writers, setWriters] = useState<User[]>([]);
@@ -134,172 +134,175 @@ export default function Discover() {
   };
 
   return (
-    <div className="grid lg:grid-cols-4 gap-8">
-      {/* Main Content */}
-      <div className="lg:col-span-3 space-y-6">
-        {/* Search Bar */}
-        <form onSubmit={handleSearch} className="relative">
-          <Search
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-400"
-            size={20}
-          />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search posts and writers..."
-            className="input pl-12 pr-4 py-3"
-          />
-        </form>
+    <div className="px-8 py-12">
+      <div className="grid lg:grid-cols-4 gap-8 max-w-7xl mx-auto">
+        {/* Main Content */}
+        <div className="lg:col-span-3 space-y-6">
+          {/* Search Bar */}
+          <form onSubmit={handleSearch} className="relative">
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-ink-500"
+              size={20}
+            />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search posts and writers..."
+              className="input pl-12 pr-4 py-3"
+            />
+          </form>
 
-        {/* Category Header (if viewing a category) */}
-        {selectedCategory && (
-          <div className="bg-white rounded-xl p-6 border border-paper-100">
-            <div className="flex items-center space-x-2 text-ink-500 mb-2">
-              <Hash size={20} />
-              <span className="font-medium">Category</span>
+          {/* Category Header (if viewing a category) */}
+          {selectedCategory && (
+            <div className="card p-6">
+              <div className="flex items-center space-x-2 text-ink-400 mb-2">
+                <Hash size={20} />
+                <span className="font-medium">Category</span>
+              </div>
+              <h1 className="text-3xl font-display font-bold text-ink-100">
+                {selectedCategory.name}
+              </h1>
+              {selectedCategory.description && (
+                <p className="text-ink-400 mt-2">{selectedCategory.description}</p>
+              )}
             </div>
-            <h1 className="text-3xl font-display font-bold text-ink-900">
-              {selectedCategory.name}
-            </h1>
-            {selectedCategory.description && (
-              <p className="text-ink-600 mt-2">{selectedCategory.description}</p>
-            )}
-          </div>
-        )}
+          )}
 
-        {/* Tabs */}
-        {!slug && !searchQuery && (
-          <div className="flex items-center space-x-1 border-b border-paper-100">
-            <TabButton
-              active={activeTab === 'trending'}
-              onClick={() => setActiveTab('trending')}
-              icon={TrendingUp}
-              label="Trending"
-            />
-            <TabButton
-              active={activeTab === 'latest'}
-              onClick={() => setActiveTab('latest')}
-              icon={Clock}
-              label="Latest"
-            />
-            <TabButton
-              active={activeTab === 'writers'}
-              onClick={() => setActiveTab('writers')}
-              icon={Users}
-              label="Writers"
-            />
-          </div>
-        )}
+          {/* Tabs */}
+          {!slug && !searchQuery && (
+            <div className="flex items-center space-x-1 border-b border-ink-700">
+              <TabButton
+                active={activeTab === 'trending'}
+                onClick={() => setActiveTab('trending')}
+                icon={TrendingUp}
+                label="Trending"
+              />
+              <TabButton
+                active={activeTab === 'latest'}
+                onClick={() => setActiveTab('latest')}
+                icon={Clock}
+                label="Latest"
+              />
+              <TabButton
+                active={activeTab === 'writers'}
+                onClick={() => setActiveTab('writers')}
+                icon={Users}
+                label="Writers"
+              />
+            </div>
+          )}
 
-        {/* Type Filter */}
-        {activeTab !== 'writers' && (
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-ink-500">Filter:</span>
-            <TypeFilterButton
-              active={typeFilter === 'all'}
-              onClick={() => setTypeFilter('all')}
-              label="All"
-            />
-            <TypeFilterButton
-              active={typeFilter === 'line'}
-              onClick={() => setTypeFilter('line')}
-              icon={Type}
-              label="Lines"
-            />
-            <TypeFilterButton
-              active={typeFilter === 'page'}
-              onClick={() => setTypeFilter('page')}
-              icon={FileText}
-              label="Pages"
-            />
-            <TypeFilterButton
-              active={typeFilter === 'book'}
-              onClick={() => setTypeFilter('book')}
-              icon={BookOpen}
-              label="Books"
-            />
-          </div>
-        )}
+          {/* Type Filter */}
+          {activeTab !== 'writers' && (
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-ink-400">Filter:</span>
+              <TypeFilterButton
+                active={typeFilter === 'all'}
+                onClick={() => setTypeFilter('all')}
+                label="All"
+              />
+              <TypeFilterButton
+                active={typeFilter === 'line'}
+                onClick={() => setTypeFilter('line')}
+                icon={Type}
+                label="Lines"
+              />
+              <TypeFilterButton
+                active={typeFilter === 'page'}
+                onClick={() => setTypeFilter('page')}
+                icon={FileText}
+                label="Pages"
+              />
+              <TypeFilterButton
+                active={typeFilter === 'book'}
+                onClick={() => setTypeFilter('book')}
+                icon={BookOpen}
+                label="Books"
+              />
+            </div>
+          )}
 
-        {/* Content */}
-        {loading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="card p-6 animate-pulse">
-                <div className="flex items-center space-x-3 mb-4">
-                  <div className="w-10 h-10 rounded-full bg-paper-200" />
+          {/* Content */}
+          {loading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="card p-6 animate-pulse">
+                  <div className="flex items-center space-x-3 mb-4">
+                    <div className="w-10 h-10 rounded-full bg-ink-700" />
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-ink-700 rounded" />
+                      <div className="h-3 w-20 bg-ink-700 rounded" />
+                    </div>
+                  </div>
                   <div className="space-y-2">
-                    <div className="h-4 w-32 bg-paper-200 rounded" />
-                    <div className="h-3 w-20 bg-paper-200 rounded" />
+                    <div className="h-4 bg-ink-700 rounded w-3/4" />
+                    <div className="h-4 bg-ink-700 rounded w-1/2" />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <div className="h-4 bg-paper-200 rounded w-3/4" />
-                  <div className="h-4 bg-paper-200 rounded w-1/2" />
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          ) : activeTab === 'writers' && !slug && !searchQuery ? (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {writers.map((writer) => (
+                <WriterCard key={writer.id} writer={writer} />
+              ))}
+            </div>
+          ) : posts.length > 0 ? (
+            <div className="space-y-4">
+              {posts.map((post) => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  variant="list"
+                  onAppreciate={handleAppreciate}
+                  onBookmark={handleBookmark}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-12">
+              <p className="text-ink-400">No posts found.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar */}
+        <aside className="space-y-6">
+          {/* Popular Categories */}
+          <div className="card p-4">
+            <h3 className="font-heading font-semibold text-ink-100 mb-4">
+              Popular Categories
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((category) => (
+                <Link
+                  key={category.id}
+                  to={`/discover/category/${category.slug}`}
+                  className={`text-sm px-3 py-1.5 rounded-full transition-colors ${
+                    selectedCategory?.id === category.id
+                      ? 'bg-gold-600 text-ink-950'
+                      : 'bg-ink-700 text-ink-300 hover:bg-ink-600'
+                  }`}
+                >
+                  #{category.name}
+                </Link>
+              ))}
+            </div>
           </div>
-        ) : activeTab === 'writers' && !slug && !searchQuery ? (
-          <div className="grid sm:grid-cols-2 gap-4">
-            {writers.map((writer) => (
-              <WriterCard key={writer.id} writer={writer} />
-            ))}
+
+          {/* Info Card */}
+          <div className="card p-4">
+            <h3 className="font-heading font-semibold text-ink-100 mb-2">
+              About Discover
+            </h3>
+            <p className="text-sm text-ink-400">
+              Explore trending posts, discover new writers, and find content that
+              resonates with you. Use categories to narrow your search.
+            </p>
           </div>
-        ) : posts.length > 0 ? (
-          <div className="space-y-4">
-            {posts.map((post) => (
-              <PostCard
-                key={post.id}
-                post={post}
-                onAppreciate={handleAppreciate}
-                onBookmark={handleBookmark}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <p className="text-ink-500">No posts found.</p>
-          </div>
-        )}
+        </aside>
       </div>
-
-      {/* Sidebar */}
-      <aside className="space-y-6">
-        {/* Popular Categories */}
-        <div className="card p-4">
-          <h3 className="font-heading font-semibold text-ink-900 mb-4">
-            Popular Categories
-          </h3>
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
-              <Link
-                key={category.id}
-                to={`/discover/category/${category.slug}`}
-                className={`text-sm px-3 py-1.5 rounded-full transition-colors ${
-                  selectedCategory?.id === category.id
-                    ? 'bg-ink-900 text-paper-50'
-                    : 'bg-paper-100 text-ink-600 hover:bg-paper-200'
-                }`}
-              >
-                #{category.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Info Card */}
-        <div className="card p-4">
-          <h3 className="font-heading font-semibold text-ink-900 mb-2">
-            About Discover
-          </h3>
-          <p className="text-sm text-ink-600">
-            Explore trending posts, discover new writers, and find content that
-            resonates with you. Use categories to narrow your search.
-          </p>
-        </div>
-      </aside>
     </div>
   );
 }
@@ -317,8 +320,8 @@ function TabButton({ active, onClick, icon: Icon, label }: TabButtonProps) {
       onClick={onClick}
       className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition-colors ${
         active
-          ? 'border-ink-900 text-ink-900'
-          : 'border-transparent text-ink-500 hover:text-ink-700'
+          ? 'border-gold-600 text-gold-600'
+          : 'border-transparent text-ink-400 hover:text-ink-200'
       }`}
     >
       <Icon size={18} />
@@ -340,8 +343,8 @@ function TypeFilterButton({ active, onClick, icon: Icon, label }: TypeFilterButt
       onClick={onClick}
       className={`flex items-center space-x-1 px-3 py-1.5 rounded-full text-sm transition-colors ${
         active
-          ? 'bg-ink-900 text-paper-50'
-          : 'bg-paper-100 text-ink-600 hover:bg-paper-200'
+          ? 'bg-gold-600 text-ink-950'
+          : 'bg-ink-700 text-ink-300 hover:bg-ink-600'
       }`}
     >
       {Icon && <Icon size={14} />}
@@ -358,7 +361,7 @@ function WriterCard({ writer }: WriterCardProps) {
   return (
     <Link
       to={`/@${writer.username}`}
-      className="card p-4 hover:shadow-md transition-shadow"
+      className="card p-4 hover:border-ink-600 transition-colors"
     >
       <div className="flex items-center space-x-3">
         {writer.avatarUrl ? (
@@ -368,21 +371,21 @@ function WriterCard({ writer }: WriterCardProps) {
             className="w-12 h-12 rounded-full object-cover"
           />
         ) : (
-          <div className="w-12 h-12 rounded-full bg-ink-200 flex items-center justify-center">
-            <span className="text-ink-600 font-medium text-lg">
+          <div className="w-12 h-12 rounded-full bg-ink-700 flex items-center justify-center">
+            <span className="text-ink-300 font-medium text-lg">
               {writer.displayName.charAt(0)}
             </span>
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <h4 className="font-medium text-ink-900 truncate">
+          <h4 className="font-medium text-ink-100 truncate">
             {writer.displayName}
           </h4>
-          <p className="text-sm text-ink-500">@{writer.username}</p>
+          <p className="text-sm text-ink-400">@{writer.username}</p>
         </div>
       </div>
       {writer.bio && (
-        <p className="text-sm text-ink-600 mt-3 line-clamp-2">{writer.bio}</p>
+        <p className="text-sm text-ink-400 mt-3 line-clamp-2">{writer.bio}</p>
       )}
       <div className="flex items-center space-x-4 mt-3 text-sm text-ink-500">
         <span>{writer.postCount || 0} posts</span>

@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@clerk/clerk-react": "^5.4.0",
+    "@stripe/stripe-js": "^8.6.4",
     "@tiptap/extension-color": "^2.6.6",
     "@tiptap/extension-font-family": "^2.6.6",
     "@tiptap/extension-heading": "^2.6.6",
