@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { SignedIn } from '@clerk/clerk-react';
 import {
@@ -12,8 +12,11 @@ import {
   FileText,
   BookOpen,
   ArrowUp,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
+import { postApi } from '../services/api';
 
 // Tooltip wrapper component
 interface TooltipButtonProps {
@@ -82,15 +85,40 @@ export default function FloatingToolbar() {
   const { isHighlightMode, toggleHighlightMode } = useHighlightMode();
   const [showWriteMenu, setShowWriteMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const isFeedPage = location.pathname === '/feed';
 
+  // Check if we're on a post page and extract the post ID
+  const postMatch = location.pathname.match(/^\/post\/(\d+)/);
+  const postId = postMatch ? parseInt(postMatch[1]) : null;
+
+  // Clear cached summary when navigating to a different post
+  useEffect(() => {
+    setSummary(null);
+    setSummaryError(null);
+    setShowSummary(false);
+  }, [postId]);
+
   const scrollToNext = () => {
-    window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+    const snapContainer = document.querySelector('.snap-container');
+    if (snapContainer) {
+      snapContainer.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+    } else {
+      window.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
+    }
   };
 
   const scrollToPrevious = () => {
-    window.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+    const snapContainer = document.querySelector('.snap-container');
+    if (snapContainer) {
+      snapContainer.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+    } else {
+      window.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+    }
   };
 
   const scrollToTop = () => {
@@ -102,6 +130,47 @@ export default function FloatingToolbar() {
     // Also scroll window and document for other pages
     window.scrollTo({ top: 0, behavior: 'smooth' });
     document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleSummary = async () => {
+    if (!postId) return;
+
+    // Toggle off if already showing
+    if (showSummary) {
+      setShowSummary(false);
+      return;
+    }
+
+    // If we already have a cached summary, just show it
+    if (summary) {
+      setShowSummary(true);
+      return;
+    }
+
+    // Fetch new summary
+    await fetchSummary();
+  };
+
+  const fetchSummary = async () => {
+    if (!postId) return;
+
+    setSummaryLoading(true);
+    setSummaryError(null);
+    setShowSummary(true);
+
+    try {
+      const result = await postApi.getSummary(postId);
+      setSummary(result.summary);
+    } catch (error) {
+      setSummaryError(error instanceof Error ? error.message : 'Failed to generate summary');
+    } finally {
+      setSummaryLoading(false);
+    }
+  };
+
+  const handleRegenerateSummary = async () => {
+    setSummary(null);
+    await fetchSummary();
   };
 
   const handleShare = async () => {
@@ -237,15 +306,59 @@ export default function FloatingToolbar() {
         </>
       )}
 
-      {/* AI/Magic Feature Teaser */}
-      <SignedIn>
-        <TooltipButton
-          label="AI Summary"
-          className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500 transition-all hover:scale-110"
-        >
-          <Sparkles size={18} />
-        </TooltipButton>
-      </SignedIn>
+      {/* AI Summary */}
+      {postId && (
+        <SignedIn>
+          <div className="relative">
+            <TooltipButton
+              label={showSummary ? '' : 'AI Summary'}
+              onClick={handleSummary}
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
+                showSummary
+                  ? 'bg-purple-600 text-white border border-purple-500'
+                  : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-purple-400 hover:border-purple-500'
+              }`}
+            >
+              {summaryLoading ? (
+                <Loader2 size={18} className="animate-spin" />
+              ) : (
+                <Sparkles size={18} />
+              )}
+            </TooltipButton>
+            {showSummary && (
+              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 w-72 bg-ink-800 border border-purple-500/50 rounded-lg p-4 shadow-xl">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-purple-400 text-sm font-medium flex items-center gap-1">
+                    <Sparkles size={14} />
+                    AI Summary
+                  </span>
+                  <button
+                    onClick={() => setShowSummary(false)}
+                    className="text-ink-400 hover:text-ink-200 transition-colors"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                {summaryLoading ? (
+                  <p className="text-ink-400 text-sm">Generating summary...</p>
+                ) : summaryError ? (
+                  <p className="text-red-400 text-sm">{summaryError}</p>
+                ) : (
+                  <>
+                    <p className="text-ink-200 text-sm leading-relaxed">{summary}</p>
+                    <button
+                      onClick={handleRegenerateSummary}
+                      className="mt-3 text-xs text-ink-400 hover:text-purple-400 transition-colors"
+                    >
+                      Regenerate
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </SignedIn>
+      )}
 
       {/* Divider */}
       <div className="w-px h-4 bg-ink-700" />

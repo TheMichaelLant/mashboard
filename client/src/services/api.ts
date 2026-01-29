@@ -102,6 +102,11 @@ export const postApi = {
     fetchApi<{ success: boolean }>(`/posts/${id}`, {
       method: 'DELETE',
     }),
+
+  getSummary: (id: number) =>
+    fetchApi<{ summary: string }>(`/posts/${id}/summary`, {
+      method: 'POST',
+    }),
 };
 
 // Categories

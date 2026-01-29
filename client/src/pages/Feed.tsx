@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import PostCard from '../components/PostCard';
 import { feedApi, bookmarkApi } from '../services/api';
 import type { Post } from '../types';
 
+const FEED_SCROLL_KEY = 'feed-scroll-position';
+
 export default function Feed() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const hasRestoredScroll = useRef(false);
 
   useEffect(() => {
     const fetchFeed = async () => {
@@ -22,6 +26,27 @@ export default function Feed() {
       }
     };
     fetchFeed();
+  }, []);
+
+  // Restore scroll position after posts load
+  useEffect(() => {
+    if (!loading && posts.length > 0 && containerRef.current && !hasRestoredScroll.current) {
+      const savedPosition = sessionStorage.getItem(FEED_SCROLL_KEY);
+      if (savedPosition) {
+        // Small delay to ensure DOM is ready
+        requestAnimationFrame(() => {
+          containerRef.current?.scrollTo({ top: parseInt(savedPosition, 10) });
+        });
+      }
+      hasRestoredScroll.current = true;
+    }
+  }, [loading, posts.length]);
+
+  // Save scroll position on scroll
+  const handleScroll = useCallback(() => {
+    if (containerRef.current) {
+      sessionStorage.setItem(FEED_SCROLL_KEY, containerRef.current.scrollTop.toString());
+    }
   }, []);
 
   const handleBookmark = async (postId: number) => {
@@ -71,7 +96,7 @@ export default function Feed() {
   }
 
   return (
-    <div className="snap-container">
+    <div ref={containerRef} onScroll={handleScroll} className="snap-container">
       {posts.map((post) => (
         <PostCard
           key={post.id}

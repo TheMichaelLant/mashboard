@@ -41,14 +41,14 @@ const fontFamilies = [
 const fontSizes = ['12px', '14px', '16px', '18px', '20px', '24px', '32px', '48px'];
 
 const textColors = [
-  '#1a1a1a', // ink-900
-  '#515151', // ink-600
-  '#818181', // ink-400
-  '#7c2d12', // amber-900
-  '#1e3a8a', // blue-900
-  '#14532d', // green-900
-  '#7f1d1d', // red-900
-  '#581c87', // purple-900
+  '#f5f5f5', // ink-100
+  '#d4d4d4', // ink-200
+  '#a3a3a3', // ink-400
+  '#fbbf24', // amber-400
+  '#60a5fa', // blue-400
+  '#4ade80', // green-400
+  '#f87171', // red-400
+  '#c084fc', // purple-400
 ];
 
 interface RichTextEditorProps {
@@ -112,16 +112,16 @@ export default function RichTextEditor({
   }
 
   return (
-    <div className={`border border-paper-200 rounded-xl bg-white ${className}`}>
+    <div className={`border border-ink-700 rounded-xl bg-ink-800 ${className}`}>
       {/* Toolbar */}
-      <div className="border-b border-paper-100 p-2">
+      <div className="border-b border-ink-700 p-2">
         {!minimal && (
           <>
             {/* Font Family */}
-            <div className="flex flex-wrap items-center gap-2 mb-2 pb-2 border-b border-paper-100">
+            <div className="flex flex-wrap items-center gap-2 mb-2 pb-2 border-b border-ink-700">
               <select
                 onChange={(e) => setFontFamily(e.target.value)}
-                className="px-2 py-1 text-sm border border-paper-200 rounded-lg bg-white"
+                className="px-2 py-1 text-sm border border-ink-600 rounded-lg bg-ink-900 text-ink-200"
               >
                 {fontFamilies.map((font) => (
                   <option key={font.value} value={font.value}>
@@ -136,7 +136,7 @@ export default function RichTextEditor({
                   // Note: TipTap doesn't have native font-size, using custom styles
                   editor.chain().focus().run();
                 }}
-                className="px-2 py-1 text-sm border border-paper-200 rounded-lg bg-white"
+                className="px-2 py-1 text-sm border border-ink-600 rounded-lg bg-ink-900 text-ink-200"
               >
                 {fontSizes.map((size) => (
                   <option key={size} value={size}>
@@ -151,7 +151,7 @@ export default function RichTextEditor({
                   <button
                     key={color}
                     onClick={() => setColor(color)}
-                    className="w-6 h-6 rounded-full border border-paper-200"
+                    className="w-6 h-6 rounded-full border border-ink-600"
                     style={{ backgroundColor: color }}
                     title={color}
                   />
@@ -194,7 +194,7 @@ export default function RichTextEditor({
               >
                 <Type size={18} />
               </ToolbarButton>
-              <div className="w-px h-6 bg-paper-200 mx-1" />
+              <div className="w-px h-6 bg-ink-600 mx-1" />
             </>
           )}
 
@@ -235,7 +235,7 @@ export default function RichTextEditor({
             <Highlighter size={18} />
           </ToolbarButton>
 
-          <div className="w-px h-6 bg-paper-200 mx-1" />
+          <div className="w-px h-6 bg-ink-600 mx-1" />
 
           {/* Alignment */}
           {!minimal && (
@@ -269,7 +269,7 @@ export default function RichTextEditor({
                 <AlignJustify size={18} />
               </ToolbarButton>
 
-              <div className="w-px h-6 bg-paper-200 mx-1" />
+              <div className="w-px h-6 bg-ink-600 mx-1" />
             </>
           )}
 
@@ -289,7 +289,7 @@ export default function RichTextEditor({
             <ListOrdered size={18} />
           </ToolbarButton>
 
-          <div className="w-px h-6 bg-paper-200 mx-1" />
+          <div className="w-px h-6 bg-ink-600 mx-1" />
 
           {/* Block Elements */}
           <ToolbarButton
@@ -338,8 +338,8 @@ function ToolbarButton({ onClick, isActive, title, children }: ToolbarButtonProp
       title={title}
       className={`p-2 rounded-lg transition-colors ${
         isActive
-          ? 'bg-ink-900 text-paper-50'
-          : 'text-ink-600 hover:bg-paper-100'
+          ? 'bg-gold-600 text-ink-950'
+          : 'text-ink-400 hover:bg-ink-700 hover:text-ink-200'
       }`}
     >
       {children}

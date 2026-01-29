@@ -161,19 +161,19 @@ export default function Editor() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto animate-pulse">
-        <div className="h-8 bg-paper-200 rounded w-1/4 mb-8" />
-        <div className="h-12 bg-paper-200 rounded mb-4" />
-        <div className="h-64 bg-paper-200 rounded" />
+      <div className="max-w-4xl mx-auto p-8 animate-pulse">
+        <div className="h-8 bg-ink-800 rounded w-1/4 mb-8" />
+        <div className="h-12 bg-ink-800 rounded mb-4" />
+        <div className="h-64 bg-ink-800 rounded" />
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-3xl font-display font-bold text-ink-900">
+        <h1 className="text-3xl font-display font-bold text-ink-100">
           {editId ? 'Edit' : 'Create'} {postType === 'line' ? 'a Line' : postType === 'page' ? 'a Page' : 'a Book'}
         </h1>
         <button
@@ -218,7 +218,7 @@ export default function Editor() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="Title"
-          className="w-full text-4xl font-display font-bold text-ink-900 bg-transparent border-none focus:outline-none placeholder:text-ink-300"
+          className="w-full text-4xl font-display font-bold text-ink-100 bg-transparent border-none focus:outline-none placeholder:text-ink-500"
         />
       )}
 
@@ -229,10 +229,10 @@ export default function Editor() {
           <div className="w-64 flex-shrink-0">
             <div className="card p-4">
               <div className="flex items-center justify-between mb-4">
-                <h3 className="font-heading font-semibold text-ink-900">Chapters</h3>
+                <h3 className="font-heading font-semibold text-ink-100">Chapters</h3>
                 <button
                   onClick={addChapter}
-                  className="p-1 rounded hover:bg-paper-100"
+                  className="p-1 rounded hover:bg-ink-700 text-ink-400 hover:text-ink-200"
                   title="Add chapter"
                 >
                   <Plus size={20} />
@@ -244,14 +244,14 @@ export default function Editor() {
                     key={index}
                     className={`flex items-center space-x-2 p-2 rounded-lg cursor-pointer transition-colors ${
                       currentChapter === index
-                        ? 'bg-ink-900 text-paper-50'
-                        : 'hover:bg-paper-100'
+                        ? 'bg-gold-600 text-ink-950'
+                        : 'hover:bg-ink-700 text-ink-300'
                     }`}
                     onClick={() => setCurrentChapter(index)}
                   >
                     <GripVertical
                       size={16}
-                      className={currentChapter === index ? 'text-paper-200' : 'text-ink-300'}
+                      className={currentChapter === index ? 'text-ink-800' : 'text-ink-500'}
                     />
                     <span className="flex-1 truncate text-sm">
                       {chapter.title || `Chapter ${index + 1}`}
@@ -262,10 +262,10 @@ export default function Editor() {
                           e.stopPropagation();
                           removeChapter(index);
                         }}
-                        className={`p-1 rounded hover:bg-red-100 ${
+                        className={`p-1 rounded hover:bg-red-900/50 ${
                           currentChapter === index
-                            ? 'text-paper-200 hover:text-red-500'
-                            : 'text-ink-400 hover:text-red-500'
+                            ? 'text-ink-800 hover:text-red-400'
+                            : 'text-ink-500 hover:text-red-400'
                         }`}
                       >
                         <Trash2 size={14} />
@@ -278,7 +278,7 @@ export default function Editor() {
 
             {/* Book Description */}
             <div className="mt-4">
-              <label className="text-sm font-medium text-ink-700 block mb-2">
+              <label className="text-sm font-medium text-ink-300 block mb-2">
                 Book Description
               </label>
               <textarea
@@ -297,7 +297,7 @@ export default function Editor() {
               value={chapters[currentChapter]?.title || ''}
               onChange={(e) => updateChapter(currentChapter, 'title', e.target.value)}
               placeholder="Chapter title"
-              className="w-full text-xl font-heading font-semibold text-ink-900 bg-transparent border-none focus:outline-none placeholder:text-ink-300 mb-4"
+              className="w-full text-xl font-heading font-semibold text-ink-100 bg-transparent border-none focus:outline-none placeholder:text-ink-500 mb-4"
             />
             <RichTextEditor
               content={chapters[currentChapter]?.content || ''}
@@ -326,11 +326,11 @@ export default function Editor() {
 
       {/* Post Settings */}
       <div className="card p-6 space-y-6">
-        <h3 className="font-heading font-semibold text-ink-900">Post Settings</h3>
+        <h3 className="font-heading font-semibold text-ink-100">Post Settings</h3>
 
         {/* Excerpt */}
         <div>
-          <label className="text-sm font-medium text-ink-700 block mb-2">
+          <label className="text-sm font-medium text-ink-300 block mb-2">
             Excerpt (optional)
           </label>
           <textarea
@@ -343,19 +343,19 @@ export default function Editor() {
 
         {/* Categories */}
         <div>
-          <label className="text-sm font-medium text-ink-700 block mb-2">
+          <label className="text-sm font-medium text-ink-300 block mb-2">
             Categories
           </label>
           <div className="flex flex-wrap gap-2 mb-2">
             {selectedCategories.map((category) => (
               <span
                 key={category.id}
-                className="inline-flex items-center space-x-1 px-3 py-1 bg-ink-100 text-ink-700 rounded-full text-sm"
+                className="inline-flex items-center space-x-1 px-3 py-1 bg-ink-700 text-ink-200 rounded-full text-sm"
               >
                 <span>#{category.name}</span>
                 <button
                   onClick={() => removeCategory(category.id)}
-                  className="hover:text-red-500"
+                  className="hover:text-red-400"
                 >
                   ×
                 </button>
@@ -371,14 +371,14 @@ export default function Editor() {
               className="input"
             />
             {categorySearch && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-paper-100 z-10 max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-1 bg-ink-800 rounded-lg shadow-lg border border-ink-700 z-10 max-h-48 overflow-y-auto">
                 {availableCategories
                   .filter((c) => !selectedCategories.find((s) => s.id === c.id))
                   .map((category) => (
                     <button
                       key={category.id}
                       onClick={() => addCategory(category)}
-                      className="w-full px-4 py-2 text-left hover:bg-paper-50 text-sm"
+                      className="w-full px-4 py-2 text-left hover:bg-ink-700 text-sm text-ink-200"
                     >
                       #{category.name}
                     </button>
@@ -388,7 +388,7 @@ export default function Editor() {
                 ) && (
                   <button
                     onClick={createCategory}
-                    className="w-full px-4 py-2 text-left hover:bg-paper-50 text-sm text-ink-500"
+                    className="w-full px-4 py-2 text-left hover:bg-ink-700 text-sm text-ink-400"
                   >
                     Create "#{categorySearch}"
                   </button>
@@ -401,22 +401,22 @@ export default function Editor() {
         {/* Paid Content Toggle */}
         <div className="flex items-center justify-between">
           <div>
-            <label className="font-medium text-ink-700 flex items-center space-x-2">
+            <label className="font-medium text-ink-200 flex items-center space-x-2">
               <Lock size={18} />
               <span>Paid Content</span>
             </label>
-            <p className="text-sm text-ink-500">
+            <p className="text-sm text-ink-400">
               Only subscribers can view this post
             </p>
           </div>
           <button
             onClick={() => setIsPaid(!isPaid)}
             className={`w-12 h-6 rounded-full transition-colors ${
-              isPaid ? 'bg-ink-900' : 'bg-paper-300'
+              isPaid ? 'bg-gold-600' : 'bg-ink-700'
             }`}
           >
             <div
-              className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
+              className={`w-5 h-5 rounded-full bg-ink-100 shadow transition-transform ${
                 isPaid ? 'translate-x-6' : 'translate-x-0.5'
               }`}
             />
@@ -440,8 +440,8 @@ function PostTypeButton({ active, onClick, icon: Icon, label }: PostTypeButtonPr
       onClick={onClick}
       className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition-colors ${
         active
-          ? 'bg-ink-900 text-paper-50'
-          : 'bg-paper-100 text-ink-600 hover:bg-paper-200'
+          ? 'bg-gold-600 text-ink-950'
+          : 'bg-ink-800 text-ink-400 hover:bg-ink-700 hover:text-ink-200'
       }`}
     >
       <Icon size={18} />

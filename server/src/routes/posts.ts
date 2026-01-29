@@ -1,7 +1,19 @@
 import { Router } from 'express';
 import { eq, desc, and, inArray } from 'drizzle-orm';
+import OpenAI from 'openai';
 import { db, posts, chapters, postCategories, categories, appreciations, bookmarks, archives, subscriptions } from '../db/index.js';
 import { requireAuth, optionalAuth, AuthRequest } from '../middleware/auth.js';
+
+// Lazy-initialize OpenAI client to ensure env vars are loaded
+let openaiClient: OpenAI | null = null;
+function getOpenAI(): OpenAI {
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+  return openaiClient;
+}
 
 export const postsRouter = Router();
 
@@ -362,5 +374,80 @@ postsRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Error fetching posts:', error);
     res.status(500).json({ error: 'Failed to fetch posts' });
+  }
+});
+
+// Get AI summary of a post
+postsRouter.post('/:id/summary', optionalAuth, async (req: AuthRequest, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+
+    const post = await db.query.posts.findFirst({
+      where: eq(posts.id, postId),
+      with: {
+        chapters: true,
+      },
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Check access for paid content
+    if (post.isPaid && req.userId !== post.authorId) {
+      const subscription = await db.query.subscriptions.findFirst({
+        where: and(
+          eq(subscriptions.subscriberId, req.userId!),
+          eq(subscriptions.creatorId, post.authorId),
+          eq(subscriptions.status, 'active')
+        ),
+      });
+      if (!subscription) {
+        return res.status(403).json({ error: 'Subscribe to access this content' });
+      }
+    }
+
+    // Extract text content (strip HTML tags)
+    let textContent = '';
+    if (post.type === 'book' && post.chapters && post.chapters.length > 0) {
+      textContent = post.chapters
+        .map(ch => `${ch.title}\n${ch.content?.replace(/<[^>]*>/g, '') || ''}`)
+        .join('\n\n');
+    } else {
+      textContent = post.content?.replace(/<[^>]*>/g, '') || '';
+    }
+
+    if (!textContent.trim()) {
+      return res.status(400).json({ error: 'No content to summarize' });
+    }
+
+    // Truncate to avoid token limits (roughly 4 chars per token, ~8000 tokens max input)
+    const maxChars = 30000;
+    if (textContent.length > maxChars) {
+      textContent = textContent.slice(0, maxChars) + '...';
+    }
+
+    const completion = await getOpenAI().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a helpful assistant that summarizes written content. Provide concise, clear summaries that capture the main points and themes. Keep summaries to 2-3 sentences for short content, or a brief paragraph for longer pieces.',
+        },
+        {
+          role: 'user',
+          content: `Please summarize the following ${post.type}${post.title ? ` titled "${post.title}"` : ''}:\n\n${textContent}`,
+        },
+      ],
+      max_tokens: 300,
+      temperature: 0.5,
+    });
+
+    const summary = completion.choices[0]?.message?.content || 'Unable to generate summary';
+
+    res.json({ summary });
+  } catch (error) {
+    console.error('Error generating summary:', error);
+    res.status(500).json({ error: 'Failed to generate summary' });
   }
 });

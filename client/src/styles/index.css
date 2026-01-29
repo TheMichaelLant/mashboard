@@ -76,7 +76,7 @@
 
 /* TipTap Editor Styles */
 .tiptap-editor {
-  @apply prose prose-lg max-w-none;
+  @apply prose prose-lg prose-invert max-w-none;
 }
 
 .tiptap-editor:focus {
@@ -84,32 +84,32 @@
 }
 
 .tiptap-editor p.is-editor-empty:first-child::before {
-  @apply text-ink-300 float-left h-0 pointer-events-none;
+  @apply text-ink-500 float-left h-0 pointer-events-none;
   content: attr(data-placeholder);
 }
 
 .tiptap-editor h1 {
-  @apply text-4xl font-bold font-display mb-4;
+  @apply text-4xl font-bold font-display mb-4 text-ink-100;
 }
 
 .tiptap-editor h2 {
-  @apply text-3xl font-bold font-display mb-3;
+  @apply text-3xl font-bold font-display mb-3 text-ink-100;
 }
 
 .tiptap-editor h3 {
-  @apply text-2xl font-semibold font-display mb-2;
+  @apply text-2xl font-semibold font-display mb-2 text-ink-100;
 }
 
 .tiptap-editor p {
-  @apply text-lg leading-relaxed mb-4 font-body;
+  @apply text-lg leading-relaxed mb-4 font-body text-ink-200;
 }
 
 .tiptap-editor blockquote {
-  @apply border-l-4 border-ink-300 pl-4 italic my-4;
+  @apply border-l-4 border-gold-600 pl-4 italic my-4 text-ink-300;
 }
 
 .tiptap-editor code {
-  @apply font-mono bg-paper-100 px-1 py-0.5 rounded text-sm;
+  @apply font-mono bg-ink-700 text-gold-500 px-1 py-0.5 rounded text-sm;
 }
 
 .tiptap-editor pre {
@@ -118,15 +118,19 @@
 
 .tiptap-editor ul,
 .tiptap-editor ol {
-  @apply my-4 pl-6;
+  @apply my-4 pl-6 text-ink-200;
 }
 
 .tiptap-editor li {
   @apply mb-2;
 }
 
+.tiptap-editor li::marker {
+  @apply text-ink-400;
+}
+
 .tiptap-editor hr {
-  @apply my-8 border-paper-200;
+  @apply my-8 border-ink-600;
 }
 
 /* Post type specific styles */

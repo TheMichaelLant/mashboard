@@ -495,7 +495,7 @@ export default function PostView() {
       (a, b) => b.selectedText.length - a.selectedText.length
     );
 
-    // Create a map to track which text has been highlighted
+    // Create a set to track which text has been highlighted
     const highlightedTexts = new Set<string>();
 
     for (const highlight of sortedHighlights) {
@@ -504,11 +504,47 @@ export default function PostView() {
       // Skip if we've already highlighted this exact text
       if (highlightedTexts.has(text)) continue;
 
-      // Only replace if the text exists in content
+      // Try direct replacement first (works when no HTML tags in between and exact match)
       if (content.includes(text)) {
         const replacement = `<mark class="highlight-mark">${text}</mark>`;
         content = content.replace(text, replacement);
         highlightedTexts.add(text);
+        continue;
+      }
+
+      // Text may span across HTML tags - try to find it by building a flexible pattern
+      try {
+        // Split into words, keeping punctuation separate
+        const tokens = text.match(/[\w]+|[^\w\s]+/g) || [];
+        if (tokens.length >= 1) {
+          // Build pattern that matches tokens with possible HTML tags between them
+          const tokenPatterns = tokens.map(token =>
+            token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          );
+          // Allow optional HTML tags and whitespace between any tokens (words or punctuation)
+          const pattern = tokenPatterns.join('(?:<[^>]*>|\\s)*');
+          const regex = new RegExp(`(${pattern})`, 'i');
+          const match = content.match(regex);
+          if (match) {
+            const matchedText = match[0];
+            // If match contains HTML tags, wrap only the text portions to avoid malformed HTML
+            if (matchedText.includes('<')) {
+              // Split by tags and wrap each text portion separately
+              const replacement = matchedText.replace(
+                /([^<>]+)(?=<|$)/g,
+                (textPart) => textPart.trim() ? `<mark class="highlight-mark">${textPart}</mark>` : textPart
+              );
+              content = content.replace(matchedText, replacement);
+            } else {
+              const replacement = `<mark class="highlight-mark">${matchedText}</mark>`;
+              content = content.replace(matchedText, replacement);
+            }
+            highlightedTexts.add(text);
+          }
+        }
+      } catch (e) {
+        // If regex fails, skip this highlight
+        console.warn('Failed to create highlight regex for:', text);
       }
     }
 
