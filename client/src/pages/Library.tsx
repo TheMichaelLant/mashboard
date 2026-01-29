@@ -246,32 +246,130 @@ interface HighlightCardProps {
 }
 
 function HighlightCard({ highlight, onRemove }: HighlightCardProps) {
+  // Extract context around the highlight from post content
+  const getContext = () => {
+    if (!highlight.post?.content) return { before: '', after: '' };
+
+    // Strip HTML tags for plain text matching
+    const plainContent = highlight.post.content.replace(/<[^>]*>/g, '');
+    const highlightIndex = plainContent.indexOf(highlight.selectedText);
+
+    if (highlightIndex === -1) return { before: '', after: '' };
+
+    // Get up to 50 characters before and after
+    const contextLength = 50;
+
+    // Get text before the highlight
+    let beforeStart = Math.max(0, highlightIndex - contextLength);
+    let beforeText = plainContent.slice(beforeStart, highlightIndex).trim();
+
+    // Find a word boundary for cleaner context
+    if (beforeStart > 0) {
+      const spaceIndex = beforeText.indexOf(' ');
+      if (spaceIndex !== -1) {
+        beforeText = beforeText.slice(spaceIndex + 1);
+      }
+      beforeText = '...' + beforeText;
+    }
+
+    // Get text after the highlight
+    const afterStart = highlightIndex + highlight.selectedText.length;
+    let afterText = plainContent.slice(afterStart, afterStart + contextLength).trim();
+
+    // Find a word boundary for cleaner context
+    if (afterStart + contextLength < plainContent.length) {
+      const lastSpaceIndex = afterText.lastIndexOf(' ');
+      if (lastSpaceIndex !== -1) {
+        afterText = afterText.slice(0, lastSpaceIndex);
+      }
+      afterText = afterText + '...';
+    }
+
+    return { before: beforeText, after: afterText };
+  };
+
+  const context = getContext();
+  const author = highlight.post?.author;
+
   return (
     <div className="card p-6">
-      <div className="flex items-start justify-between mb-3">
-        <Link
-          to={`/post/${highlight.postId}`}
-          className="text-sm text-ink-400 hover:text-gold-600 transition-colors"
-        >
-          {highlight.post?.title || 'Untitled post'}
-        </Link>
+      {/* Header with author and post info */}
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex items-center space-x-3">
+          {author?.avatarUrl ? (
+            <img
+              src={author.avatarUrl}
+              alt={author.displayName}
+              className="w-10 h-10 rounded-full object-cover"
+            />
+          ) : (
+            <div className="w-10 h-10 rounded-full bg-ink-700 flex items-center justify-center">
+              <span className="text-ink-300 font-medium">
+                {author?.displayName?.charAt(0) || '?'}
+              </span>
+            </div>
+          )}
+          <div>
+            {author && (
+              <Link
+                to={`/@${author.username}`}
+                className="text-sm font-medium text-ink-200 hover:text-gold-600 transition-colors"
+              >
+                {author.displayName}
+              </Link>
+            )}
+            <Link
+              to={`/post/${highlight.postId}`}
+              className="block text-ink-400 hover:text-gold-500 transition-colors"
+            >
+              {highlight.post?.title || 'Untitled post'}
+            </Link>
+          </div>
+        </div>
         <button
           onClick={() => onRemove(highlight.id)}
-          className="p-1 rounded hover:bg-red-900/50 text-ink-400 hover:text-red-400 transition-colors"
+          className="p-1.5 rounded-lg hover:bg-red-900/50 text-ink-500 hover:text-red-400 transition-colors"
           title="Remove highlight"
         >
           <Trash2 size={16} />
         </button>
       </div>
+
+      {/* Highlight with context */}
       <blockquote className="bg-gold-900/20 border-l-4 border-gold-600 p-4 rounded-r-lg">
-        <p className="text-ink-200 italic">"{highlight.selectedText}"</p>
+        <p className="text-ink-300 leading-relaxed">
+          {context.before && (
+            <span className="text-ink-500">{context.before} </span>
+          )}
+          <span className="text-ink-100 font-medium bg-gold-600/20 px-1 rounded">
+            {highlight.selectedText}
+          </span>
+          {context.after && (
+            <span className="text-ink-500"> {context.after}</span>
+          )}
+        </p>
       </blockquote>
+
+      {/* Note if present */}
       {highlight.note && (
-        <p className="text-ink-400 text-sm mt-3">{highlight.note}</p>
+        <p className="text-ink-400 text-sm mt-3 italic">"{highlight.note}"</p>
       )}
-      <p className="text-xs text-ink-500 mt-2">
-        {new Date(highlight.createdAt).toLocaleDateString()}
-      </p>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between mt-3">
+        <p className="text-xs text-ink-500">
+          {new Date(highlight.createdAt).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          })}
+        </p>
+        {highlight.chapter && (
+          <span className="text-xs text-ink-500 bg-ink-800 px-2 py-1 rounded">
+            Chapter: {highlight.chapter.title}
+          </span>
+        )}
+      </div>
     </div>
   );
 }

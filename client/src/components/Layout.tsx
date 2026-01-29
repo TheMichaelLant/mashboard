@@ -5,7 +5,7 @@ import FloatingToolbar from './FloatingToolbar';
 
 const navItems = [
   { path: '/feed', icon: Rss, label: 'Feed', public: false },
-  { path: '/library', icon: Bookmark, label: 'Bookmarks', public: false },
+  { path: '/library', icon: Bookmark, label: 'Library', public: false },
   { path: '/settings', icon: User, label: 'Account', public: false },
 ];
 
