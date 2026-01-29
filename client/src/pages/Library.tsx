@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Bookmark, Archive, Highlighter, Trash2 } from 'lucide-react';
+import { Bookmark, Archive, Highlighter, Trash2, ChevronDown, ChevronRight } from 'lucide-react';
 import PostCard from '../components/PostCard';
 import { bookmarkApi, highlightApi, appreciationApi } from '../services/api';
 import type { Post, Highlight } from '../types';
@@ -136,15 +136,10 @@ export default function Library() {
         </div>
       ) : activeTab === 'highlights' ? (
         highlights.length > 0 ? (
-          <div className="space-y-4">
-            {highlights.map((highlight) => (
-              <HighlightCard
-                key={highlight.id}
-                highlight={highlight}
-                onRemove={handleRemoveHighlight}
-              />
-            ))}
-          </div>
+          <GroupedHighlights
+            highlights={highlights}
+            onRemove={handleRemoveHighlight}
+          />
         ) : (
           <EmptyState
             icon={Highlighter}
@@ -240,12 +235,128 @@ function TabButton({ active, onClick, icon: Icon, label, count }: TabButtonProps
   );
 }
 
-interface HighlightCardProps {
-  highlight: Highlight;
+interface GroupedHighlightsProps {
+  highlights: Highlight[];
   onRemove: (id: number) => void;
 }
 
-function HighlightCard({ highlight, onRemove }: HighlightCardProps) {
+function GroupedHighlights({ highlights, onRemove }: GroupedHighlightsProps) {
+  const [expandedPosts, setExpandedPosts] = useState<Set<number>>(new Set());
+
+  // Group highlights by post
+  const groupedHighlights = useMemo(() => {
+    const groups = new Map<number, { post: Highlight['post']; highlights: Highlight[] }>();
+
+    for (const highlight of highlights) {
+      const postId = highlight.postId;
+      if (!groups.has(postId)) {
+        groups.set(postId, { post: highlight.post, highlights: [] });
+      }
+      groups.get(postId)!.highlights.push(highlight);
+    }
+
+    // Convert to array and sort by most recent highlight
+    return Array.from(groups.values()).sort((a, b) => {
+      const aLatest = Math.max(...a.highlights.map(h => new Date(h.createdAt).getTime()));
+      const bLatest = Math.max(...b.highlights.map(h => new Date(h.createdAt).getTime()));
+      return bLatest - aLatest;
+    });
+  }, [highlights]);
+
+  const togglePost = (postId: number) => {
+    setExpandedPosts(prev => {
+      const next = new Set(prev);
+      if (next.has(postId)) {
+        next.delete(postId);
+      } else {
+        next.add(postId);
+      }
+      return next;
+    });
+  };
+
+  return (
+    <div className="space-y-4">
+      {groupedHighlights.map((group) => {
+        const postId = group.post?.id || 0;
+        const isExpanded = expandedPosts.has(postId);
+        const author = group.post?.author;
+
+        return (
+          <div key={postId} className="card overflow-hidden">
+            {/* Post Header - Clickable to expand/collapse */}
+            <button
+              onClick={() => togglePost(postId)}
+              className="w-full p-4 flex items-center justify-between hover:bg-ink-800/50 transition-colors"
+            >
+              <div className="flex items-center space-x-3">
+                {author?.avatarUrl ? (
+                  <img
+                    src={author.avatarUrl}
+                    alt={author.displayName}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-ink-700 flex items-center justify-center">
+                    <span className="text-ink-300 font-medium">
+                      {author?.displayName?.charAt(0) || '?'}
+                    </span>
+                  </div>
+                )}
+                <div className="text-left">
+                  <p className="text-ink-200 font-medium">
+                    {group.post?.title || 'Untitled post'}
+                  </p>
+                  <p className="text-sm text-ink-400">
+                    {author?.displayName} · {group.highlights.length} highlight{group.highlights.length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Link
+                  to={`/post/${postId}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-xs text-ink-400 hover:text-gold-500 px-2 py-1 rounded hover:bg-ink-700 transition-colors"
+                >
+                  View post
+                </Link>
+                {isExpanded ? (
+                  <ChevronDown size={20} className="text-ink-400" />
+                ) : (
+                  <ChevronRight size={20} className="text-ink-400" />
+                )}
+              </div>
+            </button>
+
+            {/* Highlights List */}
+            {isExpanded && (
+              <div className="border-t border-ink-700">
+                {group.highlights.map((highlight, index) => (
+                  <HighlightCard
+                    key={highlight.id}
+                    highlight={highlight}
+                    onRemove={onRemove}
+                    showPostInfo={false}
+                    isLast={index === group.highlights.length - 1}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+interface HighlightCardProps {
+  highlight: Highlight;
+  onRemove: (id: number) => void;
+  showPostInfo?: boolean;
+  isLast?: boolean;
+}
+
+function HighlightCard({ highlight, onRemove, showPostInfo = true, isLast = false }: HighlightCardProps) {
   // Extract context around the highlight from post content
   const getContext = () => {
     if (!highlight.post?.content) return { before: '', after: '' };
@@ -292,48 +403,64 @@ function HighlightCard({ highlight, onRemove }: HighlightCardProps) {
   const author = highlight.post?.author;
 
   return (
-    <div className="card p-6">
-      {/* Header with author and post info */}
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center space-x-3">
-          {author?.avatarUrl ? (
-            <img
-              src={author.avatarUrl}
-              alt={author.displayName}
-              className="w-10 h-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-10 h-10 rounded-full bg-ink-700 flex items-center justify-center">
-              <span className="text-ink-300 font-medium">
-                {author?.displayName?.charAt(0) || '?'}
-              </span>
-            </div>
-          )}
-          <div>
-            {author && (
-              <Link
-                to={`/@${author.username}`}
-                className="text-sm font-medium text-ink-200 hover:text-gold-600 transition-colors"
-              >
-                {author.displayName}
-              </Link>
+    <div className={showPostInfo ? 'card p-6' : `p-4 ${!isLast ? 'border-b border-ink-700' : ''}`}>
+      {/* Header with author and post info - only shown when not grouped */}
+      {showPostInfo && (
+        <div className="flex items-start justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            {author?.avatarUrl ? (
+              <img
+                src={author.avatarUrl}
+                alt={author.displayName}
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-full bg-ink-700 flex items-center justify-center">
+                <span className="text-ink-300 font-medium">
+                  {author?.displayName?.charAt(0) || '?'}
+                </span>
+              </div>
             )}
-            <Link
-              to={`/post/${highlight.postId}`}
-              className="block text-ink-400 hover:text-gold-500 transition-colors"
-            >
-              {highlight.post?.title || 'Untitled post'}
-            </Link>
+            <div>
+              {author && (
+                <Link
+                  to={`/@${author.username}`}
+                  className="text-sm font-medium text-ink-200 hover:text-gold-600 transition-colors"
+                >
+                  {author.displayName}
+                </Link>
+              )}
+              <Link
+                to={`/post/${highlight.postId}`}
+                className="block text-ink-400 hover:text-gold-500 transition-colors"
+              >
+                {highlight.post?.title || 'Untitled post'}
+              </Link>
+            </div>
           </div>
+          <button
+            onClick={() => onRemove(highlight.id)}
+            className="p-1.5 rounded-lg hover:bg-red-900/50 text-ink-500 hover:text-red-400 transition-colors"
+            title="Remove highlight"
+          >
+            <Trash2 size={16} />
+          </button>
         </div>
-        <button
-          onClick={() => onRemove(highlight.id)}
-          className="p-1.5 rounded-lg hover:bg-red-900/50 text-ink-500 hover:text-red-400 transition-colors"
-          title="Remove highlight"
-        >
-          <Trash2 size={16} />
-        </button>
-      </div>
+      )}
+
+      {/* Grouped view header with delete button */}
+      {!showPostInfo && (
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex-1" />
+          <button
+            onClick={() => onRemove(highlight.id)}
+            className="p-1.5 rounded-lg hover:bg-red-900/50 text-ink-500 hover:text-red-400 transition-colors"
+            title="Remove highlight"
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Highlight with context */}
       <blockquote className="bg-gold-900/20 border-l-4 border-gold-600 p-4 rounded-r-lg">
