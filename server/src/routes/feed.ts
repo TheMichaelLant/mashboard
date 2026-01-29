@@ -5,7 +5,7 @@ import { requireAuth, AuthRequest } from '../middleware/auth.js';
 
 export const feedRouter = Router();
 
-// Get user's feed (posts from followed users)
+// Get user's feed (posts from self and followed users)
 feedRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { page = '1', limit = '20', type } = req.query;
@@ -18,9 +18,8 @@ feedRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
 
     const followingIds = following.map(f => f.followingId);
 
-    if (followingIds.length === 0) {
-      return res.json([]);
-    }
+    // Include the user's own posts along with followed users
+    const feedAuthorIds = [req.userId!, ...followingIds];
 
     // Get active subscriptions
     const activeSubscriptions = await db.query.subscriptions.findMany({
@@ -32,14 +31,14 @@ feedRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
 
     const subscribedCreatorIds = activeSubscriptions.map(s => s.creatorId);
 
-    // Get posts from followed users
+    // Get posts from self and followed users
     const feedPosts = await db.query.posts.findMany({
       where: type
         ? and(
-            inArray(posts.authorId, followingIds),
+            inArray(posts.authorId, feedAuthorIds),
             eq(posts.type, type as 'line' | 'page' | 'book')
           )
-        : inArray(posts.authorId, followingIds),
+        : inArray(posts.authorId, feedAuthorIds),
       with: {
         author: true,
         categories: {
@@ -57,7 +56,9 @@ feedRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
 
     // Filter paid content and add counts
     const processedPosts = feedPosts.map(post => {
-      const hasAccess = !post.isPaid || subscribedCreatorIds.includes(post.authorId);
+      // User always has access to their own posts
+      const isOwnPost = post.authorId === req.userId;
+      const hasAccess = isOwnPost || !post.isPaid || subscribedCreatorIds.includes(post.authorId);
 
       if (!hasAccess) {
         return {
@@ -84,7 +85,7 @@ feedRouter.get('/', requireAuth, async (req: AuthRequest, res) => {
   }
 });
 
-// Get personalized feed (mix of followed users and trending)
+// Get personalized feed (mix of own posts, followed users, and trending)
 feedRouter.get('/personalized', requireAuth, async (req: AuthRequest, res) => {
   try {
     const { page = '1', limit = '20' } = req.query;
@@ -99,49 +100,41 @@ feedRouter.get('/personalized', requireAuth, async (req: AuthRequest, res) => {
 
     // Get posts - mix of followed and trending
     let feedPosts;
-    if (followingIds.length > 0) {
-      feedPosts = await db.query.posts.findMany({
-        with: {
-          author: true,
-          categories: {
-            with: {
-              category: true,
-            },
+    feedPosts = await db.query.posts.findMany({
+      with: {
+        author: true,
+        categories: {
+          with: {
+            category: true,
           },
-          appreciations: true,
         },
-        orderBy: desc(posts.createdAt),
-        limit: parseInt(limit as string) * 2,
-        offset,
-      });
+        appreciations: true,
+      },
+      orderBy: desc(posts.createdAt),
+      limit: parseInt(limit as string) * 2,
+      offset,
+    });
 
-      // Prioritize followed users' posts
-      feedPosts.sort((a, b) => {
-        const aFollowed = followingIds.includes(a.authorId);
-        const bFollowed = followingIds.includes(b.authorId);
-        if (aFollowed && !bFollowed) return -1;
-        if (!aFollowed && bFollowed) return 1;
-        return b.appreciations.length - a.appreciations.length;
-      });
+    // Prioritize own posts and followed users' posts
+    feedPosts.sort((a, b) => {
+      const aIsOwn = a.authorId === req.userId;
+      const bIsOwn = b.authorId === req.userId;
+      const aFollowed = followingIds.includes(a.authorId);
+      const bFollowed = followingIds.includes(b.authorId);
 
-      feedPosts = feedPosts.slice(0, parseInt(limit as string));
-    } else {
-      // No followed users, show trending
-      feedPosts = await db.query.posts.findMany({
-        with: {
-          author: true,
-          categories: {
-            with: {
-              category: true,
-            },
-          },
-          appreciations: true,
-        },
-        orderBy: desc(posts.createdAt),
-        limit: parseInt(limit as string),
-        offset,
-      });
-    }
+      // Own posts first
+      if (aIsOwn && !bIsOwn) return -1;
+      if (!aIsOwn && bIsOwn) return 1;
+
+      // Then followed users
+      if (aFollowed && !bFollowed) return -1;
+      if (!aFollowed && bFollowed) return 1;
+
+      // Then by appreciation count
+      return b.appreciations.length - a.appreciations.length;
+    });
+
+    feedPosts = feedPosts.slice(0, parseInt(limit as string));
 
     // Get active subscriptions
     const activeSubscriptions = await db.query.subscriptions.findMany({
@@ -155,7 +148,9 @@ feedRouter.get('/personalized', requireAuth, async (req: AuthRequest, res) => {
 
     // Process posts
     const processedPosts = feedPosts.map(post => {
-      const hasAccess = !post.isPaid || subscribedCreatorIds.includes(post.authorId);
+      // User always has access to their own posts
+      const isOwnPost = post.authorId === req.userId;
+      const hasAccess = isOwnPost || !post.isPaid || subscribedCreatorIds.includes(post.authorId);
 
       if (!hasAccess) {
         return {
