@@ -44,7 +44,7 @@ export default function App() {
         <Route path="discover" element={<Discover />} />
         <Route path="discover/category/:slug" element={<Discover />} />
         <Route path="post/:id" element={<PostView />} />
-        <Route path="@:username" element={<Profile />} />
+        <Route path=":handle" element={<Profile />} />
         <Route
           path="feed"
           element={
