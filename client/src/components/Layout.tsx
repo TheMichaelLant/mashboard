@@ -1,10 +1,11 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
-import { Rss, Bookmark, User } from 'lucide-react';
+import { Rss, Bookmark, User, Compass } from 'lucide-react';
 import FloatingToolbar from './FloatingToolbar';
 
 const navItems = [
   { path: '/feed', icon: Rss, label: 'Feed', public: false },
+  { path: '/discover', icon: Compass, label: 'Discover', public: false },
   { path: '/library', icon: Bookmark, label: 'Library', public: false },
   { path: '/settings', icon: User, label: 'Account', public: false },
 ];
@@ -12,10 +13,6 @@ const navItems = [
 export default function Layout() {
   const location = useLocation();
   const { user } = useUser();
-
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   return (
     <div className="min-h-screen flex">
@@ -96,14 +93,6 @@ export default function Layout() {
 
       {/* Floating Toolbar - Right Side */}
       <FloatingToolbar />
-
-      {/* Bottom Left - Top Button */}
-      <button
-        onClick={scrollToTop}
-        className="fixed bottom-8 left-8 px-4 py-2 border border-ink-600 text-ink-300 text-sm hover:border-ink-400 hover:text-ink-100 transition-colors"
-      >
-        Top
-      </button>
     </div>
   );
 }

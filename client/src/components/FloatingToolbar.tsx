@@ -8,10 +8,10 @@ import {
   ChevronUp,
   ChevronDown,
   Sparkles,
-  Compass,
   Type,
   FileText,
   BookOpen,
+  ArrowUp,
 } from 'lucide-react';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
 
@@ -91,6 +91,17 @@ export default function FloatingToolbar() {
 
   const scrollToPrevious = () => {
     window.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
+  };
+
+  const scrollToTop = () => {
+    // Try to scroll the snap-container first (for feed page)
+    const snapContainer = document.querySelector('.snap-container');
+    if (snapContainer) {
+      snapContainer.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    // Also scroll window and document for other pages
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleShare = async () => {
@@ -226,25 +237,27 @@ export default function FloatingToolbar() {
         </>
       )}
 
-      {/* Discover */}
-      <TooltipButton
-        label="Discover"
-        as="link"
-        to="/discover"
-        className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-gold-500 hover:border-gold-600 transition-all hover:scale-110"
-      >
-        <Compass size={18} />
-      </TooltipButton>
-
       {/* AI/Magic Feature Teaser */}
       <SignedIn>
         <TooltipButton
-          label="AI Summary (coming soon)"
+          label="AI Summary"
           className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-purple-400 hover:border-purple-500 transition-all hover:scale-110"
         >
           <Sparkles size={18} />
         </TooltipButton>
       </SignedIn>
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-ink-700" />
+
+      {/* Scroll to Top */}
+      <TooltipButton
+        label="Top"
+        onClick={scrollToTop}
+        className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-ink-100 hover:border-ink-500 transition-all hover:scale-110"
+      >
+        <ArrowUp size={18} />
+      </TooltipButton>
     </div>
   );
 }
