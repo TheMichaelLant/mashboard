@@ -153,13 +153,49 @@
 
 /* User highlight mark in post content */
 .highlight-mark {
-  @apply bg-gold-600/30 text-gold-200 rounded px-0.5 py-0.5;
+  @apply bg-gold-600/30 text-gold-200 py-0.5;
   box-decoration-break: clone;
   -webkit-box-decoration-break: clone;
+  border-radius: 2px;
 }
 
-.highlight-mark:hover {
+/* First mark in a group gets left padding/rounding */
+.highlight-mark:not([data-highlight-id] + .highlight-mark[data-highlight-id]) {
+  @apply pl-1;
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+}
+
+/* Last mark in a group (not followed by another with same ID) */
+.highlight-mark:not(:has(+ .highlight-mark[data-highlight-id])) {
+  @apply pr-1;
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+}
+
+/* Hover state - triggered by JS for group hover */
+.highlight-mark:hover,
+.highlight-mark.highlight-group-hover {
   @apply bg-gold-600/50;
+}
+
+/* Flash animation for scrolling to a highlight */
+.highlight-flash {
+  animation: highlight-pulse 2s ease-in-out;
+}
+
+@keyframes highlight-pulse {
+  0%, 100% {
+    @apply bg-gold-600/30;
+  }
+  25%, 75% {
+    @apply bg-gold-500/70;
+    box-shadow: 0 0 12px rgba(217, 169, 79, 0.5);
+  }
+  50% {
+    @apply bg-gold-400/80;
+    box-shadow: 0 0 20px rgba(217, 169, 79, 0.7);
+  }
 }
 
 /* Typography presets */

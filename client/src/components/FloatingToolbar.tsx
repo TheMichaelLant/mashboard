@@ -14,8 +14,10 @@ import {
   ArrowUp,
   Loader2,
   X,
+  TextQuote,
 } from 'lucide-react';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
+import { useHighlightDisplay } from '../contexts/HighlightDisplayContext';
 import { postApi } from '../services/api';
 
 // Tooltip wrapper component
@@ -83,6 +85,7 @@ function TooltipButton({ children, label, onClick, className = '', as = 'button'
 export default function FloatingToolbar() {
   const location = useLocation();
   const { isHighlightMode, toggleHighlightMode } = useHighlightMode();
+  const { showContext, toggleShowContext } = useHighlightDisplay();
   const [showWriteMenu, setShowWriteMenu] = useState(false);
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -91,6 +94,7 @@ export default function FloatingToolbar() {
   const [summaryError, setSummaryError] = useState<string | null>(null);
 
   const isFeedPage = location.pathname === '/feed';
+  const isLibraryHighlightsTab = location.pathname === '/library/highlights';
 
   // Check if we're on a post page and extract the post ID
   const postMatch = location.pathname.match(/^\/post\/(\d+)/);
@@ -357,6 +361,23 @@ export default function FloatingToolbar() {
               </div>
             )}
           </div>
+        </SignedIn>
+      )}
+
+      {/* Highlight Context Toggle (only on library highlights tab) */}
+      {isLibraryHighlightsTab && (
+        <SignedIn>
+          <TooltipButton
+            label={showContext ? 'Hide Context' : 'Show Context'}
+            onClick={toggleShowContext}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
+              showContext
+                ? 'bg-gold-600 text-ink-950'
+                : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-gold-500 hover:border-gold-600'
+            }`}
+          >
+            <TextQuote size={18} />
+          </TooltipButton>
         </SignedIn>
       )}
 

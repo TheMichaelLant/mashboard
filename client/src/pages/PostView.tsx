@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import {
   Heart,
@@ -30,8 +30,10 @@ import { useHighlightMode } from '../contexts/HighlightModeContext';
 export default function PostView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { userId, isSignedIn } = useAuth();
   const { isHighlightMode } = useHighlightMode();
+  const highlightTextParam = searchParams.get('highlight');
 
   const [post, setPost] = useState<Post | null>(null);
   const [highlights, setHighlights] = useState<Highlight[]>([]);
@@ -70,6 +72,93 @@ export default function PostView() {
     };
     fetchPost();
   }, [id, isSignedIn]);
+
+  // Scroll to highlighted text when coming from library
+  useEffect(() => {
+    if (!highlightTextParam || loading) return;
+
+    // Wait for content to render
+    const timeoutId = setTimeout(() => {
+      // Find all highlight marks
+      const marks = document.querySelectorAll('.highlight-mark');
+
+      // Normalize text for comparison (collapse whitespace)
+      const normalizeText = (text: string) => text.replace(/\s+/g, ' ').trim();
+      const highlightStart = normalizeText(highlightTextParam).slice(0, 30);
+
+      for (const mark of marks) {
+        const markText = normalizeText(mark.textContent || '');
+
+        // Check if this mark contains the start of our highlight
+        // OR if our highlight starts with this mark's text (for split highlights)
+        const isMatch = markText.includes(highlightStart) ||
+                        highlightStart.startsWith(markText.slice(0, 15));
+
+        if (isMatch) {
+          // Scroll to the element
+          mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+          // Get the highlight ID and flash all marks with the same ID
+          const highlightId = mark.getAttribute('data-highlight-id');
+          if (highlightId) {
+            const relatedMarks = document.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
+            relatedMarks.forEach(m => m.classList.add('highlight-flash'));
+          } else {
+            // Fallback: just flash this mark
+            mark.classList.add('highlight-flash');
+          }
+
+          setTimeout(() => {
+            document.querySelectorAll('.highlight-flash').forEach(el => {
+              el.classList.remove('highlight-flash');
+            });
+          }, 2000);
+
+          // Clear the search param after scrolling
+          setSearchParams({}, { replace: true });
+          break;
+        }
+      }
+    }, 100);
+
+    return () => clearTimeout(timeoutId);
+  }, [highlightTextParam, loading, setSearchParams]);
+
+  // Handle group hover for split highlights (marks with same data-highlight-id)
+  useEffect(() => {
+    const handleMarkHover = (e: Event) => {
+      const mark = e.target as HTMLElement;
+      if (!mark.classList.contains('highlight-mark')) return;
+
+      const highlightId = mark.dataset.highlightId;
+      if (!highlightId) return;
+
+      // Add hover class to all marks with the same highlight ID
+      const relatedMarks = document.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
+      relatedMarks.forEach(m => m.classList.add('highlight-group-hover'));
+    };
+
+    const handleMarkLeave = (e: Event) => {
+      const mark = e.target as HTMLElement;
+      if (!mark.classList.contains('highlight-mark')) return;
+
+      const highlightId = mark.dataset.highlightId;
+      if (!highlightId) return;
+
+      // Remove hover class from all marks with the same highlight ID
+      const relatedMarks = document.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
+      relatedMarks.forEach(m => m.classList.remove('highlight-group-hover'));
+    };
+
+    // Use event delegation on the article content
+    document.addEventListener('mouseenter', handleMarkHover, true);
+    document.addEventListener('mouseleave', handleMarkLeave, true);
+
+    return () => {
+      document.removeEventListener('mouseenter', handleMarkHover, true);
+      document.removeEventListener('mouseleave', handleMarkLeave, true);
+    };
+  }, []);
 
   // Close highlight menu when clicking outside
   useEffect(() => {
@@ -500,13 +589,14 @@ export default function PostView() {
 
     for (const highlight of sortedHighlights) {
       const text = highlight.selectedText;
+      const highlightId = highlight.id;
 
       // Skip if we've already highlighted this exact text
       if (highlightedTexts.has(text)) continue;
 
       // Try direct replacement first (works when no HTML tags in between and exact match)
       if (content.includes(text)) {
-        const replacement = `<mark class="highlight-mark">${text}</mark>`;
+        const replacement = `<mark class="highlight-mark" data-highlight-id="${highlightId}">${text}</mark>`;
         content = content.replace(text, replacement);
         highlightedTexts.add(text);
         continue;
@@ -529,14 +619,14 @@ export default function PostView() {
             const matchedText = match[0];
             // If match contains HTML tags, wrap only the text portions to avoid malformed HTML
             if (matchedText.includes('<')) {
-              // Split by tags and wrap each text portion separately
+              // Split by tags and wrap each text portion separately, all with same highlight ID
               const replacement = matchedText.replace(
                 /([^<>]+)(?=<|$)/g,
-                (textPart) => textPart.trim() ? `<mark class="highlight-mark">${textPart}</mark>` : textPart
+                (textPart) => textPart.trim() ? `<mark class="highlight-mark" data-highlight-id="${highlightId}">${textPart}</mark>` : textPart
               );
               content = content.replace(matchedText, replacement);
             } else {
-              const replacement = `<mark class="highlight-mark">${matchedText}</mark>`;
+              const replacement = `<mark class="highlight-mark" data-highlight-id="${highlightId}">${matchedText}</mark>`;
               content = content.replace(matchedText, replacement);
             }
             highlightedTexts.add(text);
