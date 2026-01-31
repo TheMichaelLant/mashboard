@@ -6,6 +6,10 @@
 export interface HighlightInput {
   id: number;
   selectedText: string;
+  /** Character offset in plain text content where highlight starts (optional for backward compat) */
+  plainTextStart?: number;
+  /** Character offset in plain text content where highlight ends (optional for backward compat) */
+  plainTextEnd?: number;
 }
 
 export interface ProcessHighlightsOptions {
@@ -128,14 +132,238 @@ export function findAdjacent(
 }
 
 /**
- * Checks if two strings either overlap or are adjacent in the content
+ * Checks if two texts actually overlap at the same location in the content
+ * This prevents false positives where texts overlap textually but are in different parts of the document
+ *
+ * Handles both:
+ * - Edge overlaps: where one text's end matches another's beginning
+ * - Containment: where one text contains another (needed for split highlight)
+ *
+ * For containment, we verify that both texts exist at the SAME location in content
+ * to avoid false positives where the contained text appears elsewhere in the document.
  */
-export function findOverlapOrAdjacent(
+export function findOverlapInContent(
   highlightText: string,
   selectedText: string,
   content: string
 ): boolean {
-  return findOverlap(highlightText, selectedText) || findAdjacent(highlightText, selectedText, content) !== null;
+  if (!content) return false;
+
+  const plainContent = stripHtmlWithSpaces(content);
+
+  // Check for containment with position verification
+  // This is needed for split highlight functionality
+  // IMPORTANT: Only match containment if ALL occurrences of the selected text
+  // are within the highlight's range. If the selected text appears elsewhere
+  // in the content, we can't reliably know which occurrence the user selected.
+  if (highlightText.includes(selectedText) && highlightText !== selectedText) {
+    // Find where the highlight exists in content
+    const highlightPos = plainContent.indexOf(highlightText);
+    if (highlightPos !== -1) {
+      const highlightEnd = highlightPos + highlightText.length;
+
+      // Check if ALL occurrences of selectedText are within the highlight's range
+      let allWithinHighlight = true;
+      let hasOccurrenceInHighlight = false;
+      let searchPos = 0;
+
+      while (searchPos < plainContent.length) {
+        const occurrencePos = plainContent.indexOf(selectedText, searchPos);
+        if (occurrencePos === -1) break;
+
+        const occurrenceEnd = occurrencePos + selectedText.length;
+        if (occurrencePos >= highlightPos && occurrenceEnd <= highlightEnd) {
+          // This occurrence is within the highlight
+          hasOccurrenceInHighlight = true;
+        } else {
+          // This occurrence is outside the highlight
+          allWithinHighlight = false;
+        }
+        searchPos = occurrencePos + 1;
+      }
+
+      // Only match if there's at least one occurrence in the highlight
+      // AND all occurrences are within the highlight (no ambiguity)
+      if (hasOccurrenceInHighlight && allWithinHighlight) {
+        return true;
+      }
+    }
+  }
+
+  if (selectedText.includes(highlightText) && selectedText !== highlightText) {
+    // Find where the selection would exist in content
+    const selectedPos = plainContent.indexOf(selectedText);
+    if (selectedPos !== -1) {
+      const selectedEnd = selectedPos + selectedText.length;
+
+      // Check if ALL occurrences of highlightText are within the selection's range
+      let allWithinSelection = true;
+      let hasOccurrenceInSelection = false;
+      let searchPos = 0;
+
+      while (searchPos < plainContent.length) {
+        const occurrencePos = plainContent.indexOf(highlightText, searchPos);
+        if (occurrencePos === -1) break;
+
+        const occurrenceEnd = occurrencePos + highlightText.length;
+        if (occurrencePos >= selectedPos && occurrenceEnd <= selectedEnd) {
+          // This occurrence is within the selection
+          hasOccurrenceInSelection = true;
+        } else {
+          // This occurrence is outside the selection
+          allWithinSelection = false;
+        }
+        searchPos = occurrencePos + 1;
+      }
+
+      // Only match if there's at least one occurrence in the selection
+      // AND all occurrences are within the selection (no ambiguity)
+      if (hasOccurrenceInSelection && allWithinSelection) {
+        return true;
+      }
+    }
+  }
+
+  // Handle exact match case - identical texts always overlap
+  if (highlightText === selectedText) {
+    return plainContent.includes(highlightText);
+  }
+
+  // Check for edge overlaps where texts meet/overlap at boundaries
+  // Require minimum 2-character overlap to avoid false positives
+
+  // Pattern 1: Check for edge overlaps where highlightText end overlaps selectedText start
+  // e.g., highlight="...incr" and selection="increased" -> overlap at "incr"
+  for (let i = 1; i < highlightText.length; i++) {
+    const highlightSuffix = highlightText.slice(i);
+    // Require at least 2 characters overlap to avoid single-char false positives
+    if (highlightSuffix.length < 2) continue;
+    if (selectedText.startsWith(highlightSuffix)) {
+      // Check if this overlap actually exists in content
+      // Combined text: highlightText + remainder of selection (without the overlap)
+      const remainingSelected = selectedText.slice(highlightSuffix.length);
+      if (remainingSelected.length > 0) {
+        // The combined text should exist in content
+        // e.g., "...incr" + "eased" should form "...increased" which exists in content
+        const combinedText = highlightText + remainingSelected;
+        if (plainContent.includes(combinedText)) {
+          return true;
+        }
+        // Also try with flexible whitespace for block boundaries
+        const flexPattern = new RegExp(escapeRegex(highlightText) + '\\s*' + escapeRegex(remainingSelected.trim()));
+        if (flexPattern.test(plainContent)) {
+          return true;
+        }
+      } else {
+        // Selection is fully a suffix of highlight - verify highlight exists in content
+        if (plainContent.includes(highlightText)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  // Pattern 2: Check for edge overlaps the other direction
+  // e.g., highlight="eased by..." and selection="increased" -> overlap at "eased"
+  for (let i = 1; i < selectedText.length; i++) {
+    const selectedSuffix = selectedText.slice(i);
+    // Require at least 2 characters overlap to avoid single-char false positives
+    if (selectedSuffix.length < 2) continue;
+    if (highlightText.startsWith(selectedSuffix)) {
+      // Combined text: selection + remainder of highlight (without the overlap)
+      const remainingHighlight = highlightText.slice(selectedSuffix.length);
+      if (remainingHighlight.length > 0) {
+        // The combined text should exist in content
+        // e.g., "increased" + " by roughly" forms "increased by roughly"
+        const combinedText = selectedText + remainingHighlight;
+        if (plainContent.includes(combinedText)) {
+          return true;
+        }
+        // Also try with flexible whitespace for block boundaries
+        const flexPattern = new RegExp(escapeRegex(selectedText) + '\\s*' + escapeRegex(remainingHighlight.trim()));
+        if (flexPattern.test(plainContent)) {
+          return true;
+        }
+      } else {
+        // Highlight is fully a suffix of selection - verify selection exists in content
+        if (plainContent.includes(selectedText)) {
+          return true;
+        }
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Position info for overlap/adjacency detection
+ */
+export interface SelectionPosition {
+  /** Start position in plain text */
+  start: number;
+  /** End position in plain text */
+  end: number;
+}
+
+/**
+ * Checks if two positions are adjacent or overlapping
+ * Adjacent means they touch (one ends where the other begins, with optional whitespace)
+ * Overlapping means they share character positions
+ */
+export function arePositionsAdjacentOrOverlapping(
+  highlightPos: SelectionPosition,
+  selectionPos: SelectionPosition,
+  plainContent: string
+): boolean {
+  // Check for overlap (ranges intersect)
+  const overlap = !(selectionPos.end <= highlightPos.start || selectionPos.start >= highlightPos.end);
+  if (overlap) return true;
+
+  // Check for adjacency (with possible whitespace between)
+  // Selection immediately after highlight
+  if (selectionPos.start >= highlightPos.end) {
+    const gap = plainContent.slice(highlightPos.end, selectionPos.start);
+    if (gap.length === 0 || /^\s*$/.test(gap)) return true;
+  }
+
+  // Selection immediately before highlight
+  if (selectionPos.end <= highlightPos.start) {
+    const gap = plainContent.slice(selectionPos.end, highlightPos.start);
+    if (gap.length === 0 || /^\s*$/.test(gap)) return true;
+  }
+
+  return false;
+}
+
+/**
+ * Checks if two strings either overlap or are adjacent in the content
+ * Uses position-based detection when position info is available.
+ * Falls back to text-based detection when positions aren't available.
+ */
+export function findOverlapOrAdjacent(
+  highlightText: string,
+  selectedText: string,
+  content: string,
+  highlightPosition?: SelectionPosition,
+  selectionPosition?: SelectionPosition
+): boolean {
+  // Use position-based detection when we have BOTH positions
+  if (highlightPosition && selectionPosition) {
+    const plainContent = stripHtmlWithSpaces(content);
+    return arePositionsAdjacentOrOverlapping(highlightPosition, selectionPosition, plainContent);
+  }
+
+  // Fall back to text-based detection when positions aren't available
+  // This handles edge cases where position calculation fails
+
+  // First check adjacency (content-aware)
+  if (findAdjacent(highlightText, selectedText, content) !== null) {
+    return true;
+  }
+
+  // Then check for actual overlap in the content
+  return findOverlapInContent(highlightText, selectedText, content);
 }
 
 /**
@@ -237,6 +465,44 @@ export function mapPlainToHtmlPosition(
 }
 
 /**
+ * Finds the position of text at a specific occurrence (0-indexed)
+ * Returns -1 if not found or if occurrence doesn't exist
+ */
+export function findTextAtPosition(
+  plainContent: string,
+  text: string,
+  targetPosition?: number
+): number {
+  if (targetPosition === undefined) {
+    // No position specified, return first occurrence
+    return plainContent.indexOf(text);
+  }
+
+  // Find all occurrences
+  let searchPos = 0;
+  while (searchPos < plainContent.length) {
+    const foundPos = plainContent.indexOf(text, searchPos);
+    if (foundPos === -1) break;
+
+    // Check if this occurrence contains the target position
+    const foundEnd = foundPos + text.length;
+    if (targetPosition >= foundPos && targetPosition < foundEnd) {
+      return foundPos;
+    }
+
+    // If we've passed the target position, the text doesn't exist there
+    if (foundPos > targetPosition) {
+      break;
+    }
+
+    searchPos = foundPos + 1;
+  }
+
+  // Target position not within any occurrence, return first occurrence as fallback
+  return plainContent.indexOf(text);
+}
+
+/**
  * Wraps text that may contain HTML tags with mark elements
  * Adds data-highlight-pos attribute for proper border-radius styling:
  * - "only": single segment (both first and last)
@@ -323,6 +589,7 @@ export function processHighlights({ content, highlights }: ProcessHighlightsOpti
     const text = highlight.selectedText;
     const highlightId = highlight.id;
     const normalizedText = normalizeWhitespace(text);
+    const targetPosition = highlight.plainTextStart;
 
     // Skip empty or whitespace-only highlights
     if (!normalizedText) continue;
@@ -330,23 +597,15 @@ export function processHighlights({ content, highlights }: ProcessHighlightsOpti
     // Skip if this text is already highlighted or contained within a longer highlight
     if (isContainedInHighlighted(normalizedText)) continue;
 
-    // Method 1: Try direct replacement (exact match in content, no HTML tags involved)
-    if (result.includes(text)) {
-      const replacement = `<mark class="highlight-mark" data-highlight-id="${highlightId}">${text}</mark>`;
-      result = result.replace(text, replacement);
-      highlightedTexts.push(normalizedText);
-      continue;
-    }
-
-    // Method 2: Try matching in plain text (handles text spanning HTML tags)
+    // Match in plain text using position-aware matching
     try {
       // Add spaces between block elements so position mapping aligns with browser selections
       const htmlWithSpaces = addSpacesBetweenBlocks(result);
       // Strip HTML tags to get plain text for searching
       const plainContent = htmlWithSpaces.replace(/<[^>]*>/g, '');
 
-      // Try exact match in plain text first
-      let plainIndex = plainContent.indexOf(text);
+      // Find text at the correct position (or first occurrence if no position)
+      let plainIndex = findTextAtPosition(plainContent, text, targetPosition);
       let matchLength = text.length;
 
       // If no exact match, try flexible whitespace match

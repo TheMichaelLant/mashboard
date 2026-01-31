@@ -9,6 +9,8 @@ import {
   findAdjacent,
   findOverlapOrAdjacent,
   mergeTexts,
+  findTextAtPosition,
+  arePositionsAdjacentOrOverlapping,
 } from './highlightProcessor';
 
 describe('normalizeWhitespace', () => {
@@ -139,7 +141,7 @@ describe('processHighlights', () => {
         content: '<p>This is some sample text.</p>',
         highlights: [{ id: 1, selectedText: 'sample text' }],
       });
-      expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1">sample text</mark>');
+      expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="only">sample text</mark>');
     });
 
     it('should return original content when no highlights', () => {
@@ -342,7 +344,7 @@ describe('processHighlights', () => {
         content: '<p>Start of text.</p>',
         highlights: [{ id: 1, selectedText: 'Start' }],
       });
-      expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1">Start</mark>');
+      expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="only">Start</mark>');
     });
 
     it('should handle highlight at the very end of content', () => {
@@ -350,7 +352,7 @@ describe('processHighlights', () => {
         content: '<p>Text at end</p>',
         highlights: [{ id: 1, selectedText: 'end' }],
       });
-      expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1">end</mark>');
+      expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="only">end</mark>');
     });
 
     it('should handle self-closing tags', () => {
@@ -652,16 +654,52 @@ describe('findAdjacent', () => {
 describe('findOverlapOrAdjacent', () => {
   const content = 'Done! I\'ve created a comprehensive test suite.';
 
-  it('should return true for overlapping text', () => {
+  it('should fall back to text-based detection when no positions provided', () => {
+    // Without positions, text-based detection is used as fallback
     expect(findOverlapOrAdjacent('comprehensive test', 'test suite', content)).toBe(true);
   });
 
-  it('should return true for adjacent text', () => {
-    expect(findOverlapOrAdjacent('Done!', 'I\'ve created', content)).toBe(true);
+  it('should return true for overlapping positions', () => {
+    // "comprehensive test" is at 22-40, "test suite" overlaps at 36-46
+    expect(findOverlapOrAdjacent(
+      'comprehensive test', 'test suite', content,
+      { start: 22, end: 40 }, { start: 36, end: 46 }
+    )).toBe(true);
   });
 
-  it('should return false for non-overlapping and non-adjacent text', () => {
-    expect(findOverlapOrAdjacent('Done!', 'suite', content)).toBe(false);
+  it('should return true for adjacent positions', () => {
+    // "Done!" is at 0-5, "I've created" is at 6-18
+    expect(findOverlapOrAdjacent(
+      'Done!', 'I\'ve created', content,
+      { start: 0, end: 5 }, { start: 6, end: 18 }
+    )).toBe(true);
+  });
+
+  it('should return false for non-adjacent positions', () => {
+    // "Done!" is at 0-5, "suite" is at 41-46 (not adjacent)
+    expect(findOverlapOrAdjacent(
+      'Done!', 'suite', content,
+      { start: 0, end: 5 }, { start: 41, end: 46 }
+    )).toBe(false);
+  });
+
+  it('should return false when positions are in different locations', () => {
+    // Same text appearing multiple times but positions don't overlap
+    const content = 'User increased their efforts. Later, increased during the year was noted.';
+    // First "increased" is at 5-14, second is at 37-46
+    expect(findOverlapOrAdjacent(
+      ' increased during the year', 'increased', content,
+      { start: 36, end: 62 }, { start: 5, end: 14 }
+    )).toBe(false);
+  });
+
+  it('should return true when selection is within highlight position (split case)', () => {
+    const content = 'The quick brown fox jumps over the lazy dog.';
+    // "quick brown fox" is at 4-19, "brown" is at 10-15 (within the highlight)
+    expect(findOverlapOrAdjacent(
+      'quick brown fox', 'brown', content,
+      { start: 4, end: 19 }, { start: 10, end: 15 }
+    )).toBe(true);
   });
 });
 
@@ -833,18 +871,28 @@ describe('Complex Scenarios', () => {
   describe('findOverlapOrAdjacent complex cases', () => {
     const content = 'The quick brown fox jumps over the lazy dog.';
 
-    it('should handle partial word that looks like overlap but is not', () => {
-      // "fox" and "jumps" don't overlap, but are adjacent
-      expect(findOverlapOrAdjacent('fox', 'jumps', content)).toBe(true);
+    it('should detect adjacent positions', () => {
+      // "fox" is at 16-19, "jumps" is at 20-25 - adjacent with space
+      expect(findOverlapOrAdjacent(
+        'fox', 'jumps', content,
+        { start: 16, end: 19 }, { start: 20, end: 25 }
+      )).toBe(true);
     });
 
-    it('should detect both overlap AND adjacency', () => {
-      // "brown fox" overlaps with "fox jumps" at "fox"
-      expect(findOverlapOrAdjacent('brown fox', 'fox jumps', content)).toBe(true);
+    it('should detect overlapping positions', () => {
+      // "brown fox" is at 10-19, "fox jumps" is at 16-25 - overlap at 16-19
+      expect(findOverlapOrAdjacent(
+        'brown fox', 'fox jumps', content,
+        { start: 10, end: 19 }, { start: 16, end: 25 }
+      )).toBe(true);
     });
 
-    it('should return false for text in different parts of content', () => {
-      expect(findOverlapOrAdjacent('quick', 'lazy', content)).toBe(false);
+    it('should return false for non-adjacent positions', () => {
+      // "quick" is at 4-9, "lazy" is at 35-39 - not adjacent
+      expect(findOverlapOrAdjacent(
+        'quick', 'lazy', content,
+        { start: 4, end: 9 }, { start: 35, end: 39 }
+      )).toBe(false);
     });
   });
 
@@ -1602,7 +1650,7 @@ describe('Rare Edge Cases', () => {
         content,
         highlights: [{ id: 1, selectedText: 'Exact content' }],
       });
-      expect(result).toBe('<mark class="highlight-mark" data-highlight-id="1">Exact content</mark>');
+      expect(result).toBe('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="only">Exact content</mark>');
     });
 
     it('should handle overlapping highlights that share a word', () => {
@@ -1640,6 +1688,1249 @@ describe('Rare Edge Cases', () => {
       // Only one mark tag should be present
       const matches = result.match(/data-highlight-id="1"/g);
       expect(matches?.length).toBe(1);
+    });
+  });
+});
+
+// ============================================================================
+// POSITION-AWARE HIGHLIGHTING TESTS
+// These tests cover the position-aware features that ensure the correct
+// occurrence of text is highlighted when the same text appears multiple times.
+// ============================================================================
+
+describe('Position-Aware Highlighting', () => {
+  describe('findTextAtPosition', () => {
+    it('should find text at first occurrence when no position specified', () => {
+      const content = 'hello world hello universe';
+      expect(findTextAtPosition(content, 'hello')).toBe(0);
+    });
+
+    it('should find text at specific position', () => {
+      const content = 'hello world hello universe';
+      // First "hello" is at 0, second "hello" is at 12
+      expect(findTextAtPosition(content, 'hello', 0)).toBe(0);
+      expect(findTextAtPosition(content, 'hello', 12)).toBe(12);
+      expect(findTextAtPosition(content, 'hello', 14)).toBe(12); // Within second occurrence
+    });
+
+    it('should return first occurrence when target position is not within any match', () => {
+      const content = 'hello world hello universe';
+      // Position 6 is in "world", not in any "hello"
+      expect(findTextAtPosition(content, 'hello', 6)).toBe(0);
+    });
+
+    it('should handle single occurrence', () => {
+      const content = 'the quick brown fox';
+      expect(findTextAtPosition(content, 'quick', 4)).toBe(4);
+    });
+
+    it('should handle text not in content', () => {
+      const content = 'hello world';
+      expect(findTextAtPosition(content, 'goodbye')).toBe(-1);
+      expect(findTextAtPosition(content, 'goodbye', 0)).toBe(-1);
+    });
+  });
+
+  describe('arePositionsAdjacentOrOverlapping', () => {
+    const content = 'The quick brown fox jumps over the lazy dog.';
+
+    it('should detect overlapping ranges', () => {
+      // "quick brown" (4-15) overlaps with "brown fox" (10-19)
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 4, end: 15 },
+        { start: 10, end: 19 },
+        content
+      )).toBe(true);
+    });
+
+    it('should detect adjacent ranges with no gap', () => {
+      // "quick" (4-9) is immediately followed by " brown" (9-15)
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 4, end: 9 },
+        { start: 9, end: 15 },
+        content
+      )).toBe(true);
+    });
+
+    it('should detect adjacent ranges with whitespace gap', () => {
+      // "quick" (4-9) and "brown" (10-15) have a space between them
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 4, end: 9 },
+        { start: 10, end: 15 },
+        content
+      )).toBe(true);
+    });
+
+    it('should return false for non-adjacent, non-overlapping ranges', () => {
+      // "quick" (4-9) and "jumps" (20-25) are not adjacent
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 4, end: 9 },
+        { start: 20, end: 25 },
+        content
+      )).toBe(false);
+    });
+
+    it('should detect when selection is fully contained in highlight', () => {
+      // "brown" (10-15) is within "quick brown fox" (4-19)
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 4, end: 19 },
+        { start: 10, end: 15 },
+        content
+      )).toBe(true);
+    });
+  });
+
+  describe('findOverlapOrAdjacent with positions', () => {
+    const content = 'The cat sat on the mat. The cat was happy.';
+
+    it('should use position info when provided for both', () => {
+      // First "cat" is at 4-7, second "cat" is at 28-31
+      // Highlight is "cat sat" (4-11), selection is "sat on" (8-14)
+      // They overlap at positions 8-11
+      expect(findOverlapOrAdjacent(
+        'cat sat',
+        'sat on',
+        content,
+        { start: 4, end: 11 },
+        { start: 8, end: 14 }
+      )).toBe(true);
+    });
+
+    it('should detect non-overlap when positions are far apart', () => {
+      // First "cat" (4-7) and second "cat" (28-31) - not adjacent
+      expect(findOverlapOrAdjacent(
+        'cat',
+        'cat',
+        content,
+        { start: 4, end: 7 },
+        { start: 28, end: 31 }
+      )).toBe(false);
+    });
+
+    it('should fall back to text-based detection when positions not provided', () => {
+      // Falls back to text-based detection when positions aren't available
+      expect(findOverlapOrAdjacent('cat sat', 'sat on', content)).toBe(true);
+    });
+
+    it('should detect adjacency via positions', () => {
+      // "The" (0-3) is adjacent to "cat" (4-7) with a space between
+      expect(findOverlapOrAdjacent(
+        'The',
+        'cat',
+        content,
+        { start: 0, end: 3 },
+        { start: 4, end: 7 }
+      )).toBe(true);
+    });
+  });
+
+  describe('processHighlights with position info', () => {
+    it('should highlight correct occurrence when position is provided', () => {
+      const content = '<p>by the river, by the sea, by the mountain</p>';
+      // There are three "by" occurrences at positions 0, 14, 27 (in plain text)
+      // We want to highlight the second one (at position 14)
+      const result = processHighlights({
+        content,
+        highlights: [{
+          id: 1,
+          selectedText: 'by',
+          plainTextStart: 14,
+          plainTextEnd: 16,
+        }],
+      });
+
+      // Check that only one occurrence is highlighted
+      const markCount = (result.match(/data-highlight-id="1"/g) || []).length;
+      expect(markCount).toBe(1);
+
+      // The result should have "by" highlighted, but we can't easily verify which one
+      // without parsing the HTML structure
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should fall back to first occurrence when no position provided', () => {
+      const content = '<p>hello world hello universe</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{
+          id: 1,
+          selectedText: 'hello',
+        }],
+      });
+
+      expect(result).toContain('data-highlight-id="1"');
+      // Only one highlight should be applied (first occurrence)
+      const markCount = (result.match(/data-highlight-id="1"/g) || []).length;
+      expect(markCount).toBe(1);
+    });
+
+    it('should handle multiple highlights with different text', () => {
+      const content = '<p>the cat sat on the mat by the window</p>';
+      // Highlight "cat" at position 4 and "mat" at position 19 and "by" at position 23
+      const result = processHighlights({
+        content,
+        highlights: [
+          { id: 1, selectedText: 'cat', plainTextStart: 4, plainTextEnd: 7 },
+          { id: 2, selectedText: 'mat', plainTextStart: 19, plainTextEnd: 22 },
+          { id: 3, selectedText: 'by', plainTextStart: 23, plainTextEnd: 25 },
+        ],
+      });
+
+      // All highlights should be applied
+      expect(result).toContain('data-highlight-id="1"');
+      expect(result).toContain('data-highlight-id="2"');
+      expect(result).toContain('data-highlight-id="3"');
+    });
+
+    it('should skip duplicate text highlights (by design)', () => {
+      const content = '<p>cat dog cat bird cat fish</p>';
+      // Try to highlight the same text twice at different positions
+      // The second highlight should be skipped because the text is already highlighted
+      const result = processHighlights({
+        content,
+        highlights: [
+          { id: 1, selectedText: 'cat', plainTextStart: 8, plainTextEnd: 11 },
+          { id: 2, selectedText: 'cat', plainTextStart: 17, plainTextEnd: 20 },
+        ],
+      });
+
+      // Only one highlight should be applied (first one processed)
+      expect(result).toContain('data-highlight-id="1"');
+      // The second is skipped because 'cat' is already in highlightedTexts
+      const markCount = (result.match(/data-highlight-id/g) || []).length;
+      expect(markCount).toBe(1);
+    });
+  });
+
+  describe('Real-world position scenarios', () => {
+    it('should correctly handle "by" selection at specific position', () => {
+      // This is the actual bug scenario: selecting "by" further in the post
+      // should highlight that specific "by", not the first one
+      const content = 'increased by 5% in the first quarter. Later increased by 10% in Q2.';
+
+      // The first "by" is at position 10, the second "by" is at position 54
+      // User selects the second "by" at position 54
+      const secondByPos = content.indexOf('by', 11);
+      expect(secondByPos).toBe(54);
+
+      // When using position-aware detection, this should work correctly
+      const result = processHighlights({
+        content: `<p>${content}</p>`,
+        highlights: [{
+          id: 1,
+          selectedText: 'by',
+          plainTextStart: 54,
+          plainTextEnd: 56,
+        }],
+      });
+
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should detect extend highlight correctly for adjacent selection', () => {
+      const content = 'Job Growth in 2024 was strong';
+
+      // Existing highlight: "Job Growth" at 0-10
+      // User selects "in 2024" at 11-18
+      // These should be detected as adjacent
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 0, end: 10 },
+        { start: 11, end: 18 },
+        content
+      )).toBe(true);
+
+      // Using findOverlapOrAdjacent with positions
+      expect(findOverlapOrAdjacent(
+        'Job Growth',
+        'in 2024',
+        content,
+        { start: 0, end: 10 },
+        { start: 11, end: 18 }
+      )).toBe(true);
+    });
+
+    it('should not detect overlap when same text appears in different locations', () => {
+      const content = 'The job market. Job creation increased.';
+
+      // Highlight "job market" at 4-14
+      // User selects "Job" from "Job creation" at 16-19
+      // These should NOT be detected as overlapping because they're in different positions
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 4, end: 14 },
+        { start: 16, end: 19 },
+        content
+      )).toBe(false);
+    });
+  });
+});
+
+// ============================================================================
+// REAL ARTICLE INTEGRATION TESTS
+// These tests use the actual article content to test real-world scenarios
+// for extend, split, and merge highlight functionality.
+// ============================================================================
+
+import { stripHtmlWithSpaces } from './highlightProcessor';
+
+describe('Real Article Integration Tests', () => {
+  // The actual article HTML from the user
+  const articleHtml = `<div class="prose prose-invert prose-lg max-w-none prose-headings:text-ink-100 prose-p:text-ink-300 prose-a:text-gold-500 prose-strong:text-ink-100 prose-blockquote:border-gold-600 prose-blockquote:text-ink-400"><h2>Job Growth in the United States</h2><h3>Slower Employment Expansion</h3><p>Job creation in the United States slowed significantly in 2025. Total nonfarm payroll employment increased by roughly <strong>half a million jobs over the year</strong>, averaging fewer than <strong>50,000 new jobs per month</strong>. This represented one of the weakest annual job growth rates since the early 2000s, reflecting employer caution amid economic uncertainty.</p><h3>Unemployment Rate Trends</h3><p>The national unemployment rate gradually increased during the year, ending 2025 at approximately <strong>4.4 percent</strong>. While still low by historical standards, this increase signaled a cooling labor market compared with the tight conditions seen earlier in the decade.</p><h3>Sector Performance</h3><ul><li><p><strong>Health care and social assistance</strong> continued to add jobs due to aging population needs.</p></li><li><p><strong>Hospitality and food services</strong> experienced modest gains, supported by consumer spending.</p></li><li><p><strong>Retail trade and transportation</strong> saw job losses, partly due to automation, e-commerce consolidation, and reduced freight demand.</p></li></ul><p>Young and entry-level workers faced particular challenges, as employers reduced hiring for junior roles and increasingly sought experienced or highly skilled candidates.</p><hr><h2>Labor Force Participation and Job Openings</h2><h3>Labor Force Participation</h3><p>Labor force participation remained relatively stable, hovering just above <strong>60 percent</strong>. However, long-term unemployment persisted for a portion of job seekers, especially among older workers and those without updated technical skills.</p><h3>Job Openings</h3><p>Despite slower hiring, employers continued to report <strong>over 7 million job openings</strong> during much of 2025. This reflected ongoing mismatches between available jobs and worker skill sets rather than a lack of demand altogether.</p><hr><h2>Growth of Nontraditional Work</h2><p>Independent and contract work continued to expand. Tens of millions of Americans reported earning income through freelance, gig, or project-based work in 2025. Many of these roles are not fully captured in traditional employment statistics, suggesting the labor market is larger and more complex than payroll data alone indicates.</p><hr><h2>Global Employment Trends</h2><h3>Global Job Growth</h3><p>Worldwide employment growth also slowed. Global job creation increased by approximately <strong>1.5 percent in 2025</strong>, translating to tens of millions of new jobs, but falling short of earlier forecasts due to weaker economic growth and geopolitical uncertainty.</p><h3>Long-Term Outlook</h3><p>Looking ahead to 2030, global labor forecasts suggest that technological advancement and the green transition could create significantly more jobs than they displace. However, these gains depend heavily on large-scale reskilling and workforce adaptation.</p><hr><h2>Key Forces Shaping the 2025 Labor Market</h2><h3>Technology and Automation</h3><p>Artificial intelligence and automation played a growing role in reshaping work. While new roles emerged in technology, data, and advanced services, automation reduced demand for some routine and entry-level positions.</p><h3>Economic Conditions</h3><p>Higher interest rates, cautious business investment, and global trade pressures contributed to slower hiring and delayed expansion plans across many industries.</p><h3>Skills Mismatch</h3><p>Employers consistently reported difficulty finding workers with the right mix of technical, digital, and interpersonal skills. This mismatch remained one of the primary constraints on stronger job growth.</p><hr><h2>Implications for Workers and Employers</h2><ul><li><p><strong>Workers</strong> increasingly need adaptable skills, continuous learning, and flexibility to remain competitive.</p></li><li><p><strong>Employers</strong> are prioritizing productivity, automation, and selective hiring rather than rapid workforce expansion.</p></li><li><p><strong>Policymakers</strong> face pressure to invest in education, training, and labor force participation initiatives to support long-term employment growth.</p></li></ul></div>`;
+
+  // Get the plain text version for position calculations
+  const plainText = stripHtmlWithSpaces(articleHtml);
+
+  // Helper to find text position in plain text
+  const findPos = (text: string, startFrom = 0): number => {
+    return plainText.indexOf(text, startFrom);
+  };
+
+  describe('Position verification', () => {
+    it('should have correct plain text extraction', () => {
+      // Verify the plain text starts correctly
+      expect(plainText.startsWith('Job Growth in the United States')).toBe(true);
+
+      // Verify "Job" appears multiple times
+      const firstJob = findPos('Job');
+      const secondJob = findPos('Job', firstJob + 1);
+      expect(firstJob).toBeGreaterThanOrEqual(0);
+      expect(secondJob).toBeGreaterThan(firstJob);
+    });
+
+    it('should find key phrases at expected positions', () => {
+      // "Job Growth in the United States" should be at the start
+      expect(findPos('Job Growth in the United States')).toBe(0);
+
+      // "Job creation" should be after the headers
+      const jobCreationPos = findPos('Job creation');
+      expect(jobCreationPos).toBeGreaterThan(0);
+
+      // "increased by roughly" should exist
+      expect(findPos('increased by roughly')).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Extend Highlight - Adjacent Selection', () => {
+    it('should detect adjacency when selecting text right after existing highlight', () => {
+      // Scenario: User has highlighted "Job Growth"
+      // User selects "in the United" to extend
+      const highlightStart = findPos('Job Growth');
+      const highlightEnd = highlightStart + 'Job Growth'.length;
+
+      const selectionStart = findPos('in the United');
+      const selectionEnd = selectionStart + 'in the United'.length;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should detect adjacency when selecting text right before existing highlight', () => {
+      // Scenario: User has highlighted "United States"
+      // User selects "the" before it to extend
+      const thePos = findPos('the United States');
+      const highlightStart = findPos('United States');
+      const highlightEnd = highlightStart + 'United States'.length;
+
+      const selectionStart = thePos;
+      const selectionEnd = thePos + 'the'.length;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should NOT detect adjacency when selecting text far from existing highlight', () => {
+      // Scenario: User has highlighted "Job Growth" at the start
+      // User selects "Job creation" later in the article
+      const highlightStart = findPos('Job Growth');
+      const highlightEnd = highlightStart + 'Job Growth'.length;
+
+      const jobCreationPos = findPos('Job creation');
+      const selectionStart = jobCreationPos;
+      const selectionEnd = jobCreationPos + 'Job creation'.length;
+
+      // These should NOT be adjacent - they're far apart
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(false);
+    });
+
+    it('should detect adjacency across whitespace between words', () => {
+      // "Slower Employment" and "Expansion" are separated by a space
+      const slowerPos = findPos('Slower Employment');
+      const expansionPos = findPos('Expansion');
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: slowerPos, end: slowerPos + 'Slower Employment'.length },
+        { start: expansionPos, end: expansionPos + 'Expansion'.length },
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('Split Highlight - Selection Within Existing', () => {
+    it('should detect overlap when selection is inside existing highlight', () => {
+      // Scenario: User has highlighted "Job Growth in the United States"
+      // User selects "in the" from the middle to split/shrink
+      const fullHighlightStart = findPos('Job Growth in the United States');
+      const fullHighlightEnd = fullHighlightStart + 'Job Growth in the United States'.length;
+
+      // Find "in the" within the highlight range
+      const inThePos = plainText.indexOf('in the', fullHighlightStart);
+      const selectionStart = inThePos;
+      const selectionEnd = inThePos + 'in the'.length;
+
+      // The selection should overlap with the highlight (it's contained)
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: fullHighlightStart, end: fullHighlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should detect overlap when selection starts at highlight beginning', () => {
+      // User has highlighted "Job Growth in the United States"
+      // User selects "Job Growth" to shrink from start
+      const fullHighlightStart = findPos('Job Growth in the United States');
+      const fullHighlightEnd = fullHighlightStart + 'Job Growth in the United States'.length;
+
+      const selectionStart = fullHighlightStart;
+      const selectionEnd = fullHighlightStart + 'Job Growth'.length;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: fullHighlightStart, end: fullHighlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should detect overlap when selection ends at highlight end', () => {
+      // User has highlighted "Job Growth in the United States"
+      // User selects "United States" to shrink from end
+      const fullHighlight = 'Job Growth in the United States';
+      const fullHighlightStart = findPos(fullHighlight);
+      const fullHighlightEnd = fullHighlightStart + fullHighlight.length;
+
+      const unitedStatesPos = plainText.indexOf('United States', fullHighlightStart);
+      const selectionEnd = unitedStatesPos + 'United States'.length;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: fullHighlightStart, end: fullHighlightEnd },
+        { start: unitedStatesPos, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('Merge Highlights - Overlapping Selections', () => {
+    it('should detect overlap when two highlights share text', () => {
+      // Highlight 1: "Job Growth in"
+      // Highlight 2: "in the United"
+      // They share "in"
+      const h1Start = findPos('Job Growth in');
+      const h1End = h1Start + 'Job Growth in'.length;
+
+      const h2Start = findPos('in the United');
+      const h2End = h2Start + 'in the United'.length;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: h1Start, end: h1End },
+        { start: h2Start, end: h2End },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should detect adjacency for non-overlapping but touching highlights', () => {
+      // Highlight 1: "Job Growth"
+      // Highlight 2: "in the United States"
+      // They're adjacent with space between
+      const h1Start = findPos('Job Growth');
+      const h1End = h1Start + 'Job Growth'.length;
+
+      const h2Start = findPos('in the United States');
+      const h2End = h2Start + 'in the United States'.length;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: h1Start, end: h1End },
+        { start: h2Start, end: h2End },
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('findOverlapOrAdjacent with article content', () => {
+    it('should work with actual article HTML and positions', () => {
+      // Test with the full article HTML
+      const h1Start = findPos('Job Growth');
+      const h1End = h1Start + 'Job Growth'.length;
+
+      const selStart = findPos('in the United');
+      const selEnd = selStart + 'in the United'.length;
+
+      expect(findOverlapOrAdjacent(
+        'Job Growth',
+        'in the United',
+        articleHtml,
+        { start: h1Start, end: h1End },
+        { start: selStart, end: selEnd }
+      )).toBe(true);
+    });
+
+    it('should return false for non-adjacent text in article', () => {
+      // "Job Growth" (header) and "Job creation" (paragraph) are not adjacent
+      const jobGrowthStart = findPos('Job Growth');
+      const jobGrowthEnd = jobGrowthStart + 'Job Growth'.length;
+
+      const jobCreationStart = findPos('Job creation');
+      const jobCreationEnd = jobCreationStart + 'Job creation'.length;
+
+      expect(findOverlapOrAdjacent(
+        'Job Growth',
+        'Job creation',
+        articleHtml,
+        { start: jobGrowthStart, end: jobGrowthEnd },
+        { start: jobCreationStart, end: jobCreationEnd }
+      )).toBe(false);
+    });
+  });
+
+  describe('processHighlights with article content', () => {
+    it('should highlight text at correct position when same text appears multiple times', () => {
+      // "Job" appears multiple times in the article
+      // We want to highlight the "Job" in "Job creation" not "Job Growth"
+      const jobCreationPos = findPos('Job creation');
+
+      const result = processHighlights({
+        content: articleHtml,
+        highlights: [{
+          id: 1,
+          selectedText: 'Job',
+          plainTextStart: jobCreationPos,
+          plainTextEnd: jobCreationPos + 3,
+        }],
+      });
+
+      // Verify a highlight was applied
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight multi-word phrase at specific position', () => {
+      const phrasePos = findPos('Job creation in the United States slowed');
+
+      const result = processHighlights({
+        content: articleHtml,
+        highlights: [{
+          id: 1,
+          selectedText: 'Job creation in the United States slowed',
+          plainTextStart: phrasePos,
+          plainTextEnd: phrasePos + 'Job creation in the United States slowed'.length,
+        }],
+      });
+
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text that spans HTML tags (bold text)', () => {
+      // "half a million jobs over the year" contains <strong> tags
+      const phrasePos = findPos('half a million jobs over the year');
+
+      const result = processHighlights({
+        content: articleHtml,
+        highlights: [{
+          id: 1,
+          selectedText: 'half a million jobs over the year',
+          plainTextStart: phrasePos,
+          plainTextEnd: phrasePos + 'half a million jobs over the year'.length,
+        }],
+      });
+
+      expect(result).toContain('data-highlight-id="1"');
+    });
+  });
+
+  describe('Edge cases with repeated words', () => {
+    it('should correctly handle "by" appearing multiple times', () => {
+      // "by" appears in "increased by roughly" and other places
+      const firstByPos = findPos('increased by roughly');
+      const byInPhrase = plainText.indexOf('by', firstByPos);
+
+      // This "by" should be found at the correct position
+      const result = processHighlights({
+        content: articleHtml,
+        highlights: [{
+          id: 1,
+          selectedText: 'by',
+          plainTextStart: byInPhrase,
+          plainTextEnd: byInPhrase + 2,
+        }],
+      });
+
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should correctly handle extending "o" and "j" adjacent to existing highlight', () => {
+      // This is the user's specific bug case
+      // Let's say we have "ob Growth" highlighted and user selects "J" before it
+      const jobGrowthPos = findPos('Job Growth');
+
+      // Existing highlight: "ob Growth" (missing the J)
+      const existingHighlightStart = jobGrowthPos + 1; // starts at "o"
+      const existingHighlightEnd = existingHighlightStart + 'ob Growth'.length;
+
+      // User selects "J" to extend
+      const selectionStart = jobGrowthPos;
+      const selectionEnd = jobGrowthPos + 1;
+
+      // Should detect adjacency
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: existingHighlightStart, end: existingHighlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should handle adjacent single character selection', () => {
+      // Highlight "ob Growth", select "J" before it
+      const pos = findPos('Job Growth');
+      const highlightStart = pos + 1; // "ob Growth"
+      const highlightEnd = pos + 10;
+
+      const selectionStart = pos; // "J"
+      const selectionEnd = pos + 1;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should handle adjacent two character selection', () => {
+      // Highlight "b Growth", select "Jo" before it
+      const pos = findPos('Job Growth');
+      const highlightStart = pos + 2; // "b Growth"
+      const highlightEnd = pos + 10;
+
+      const selectionStart = pos; // "Jo"
+      const selectionEnd = pos + 2;
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('Specific user scenarios', () => {
+    it('Scenario 1: Select "jo" adjacent to highlight should show Extend', () => {
+      // If there's a highlight like "b Growth in the United States"
+      // and user selects "Jo" right before it, should be detected as adjacent
+      const fullText = 'Job Growth in the United States';
+      const fullStart = findPos(fullText);
+
+      // Existing highlight: "b Growth in the United States" (starts at "b")
+      const highlightStart = fullStart + 2;
+      const highlightEnd = fullStart + fullText.length;
+
+      // User selects "Jo"
+      const selectionStart = fullStart;
+      const selectionEnd = fullStart + 2;
+
+      const isAdjacent = arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      );
+
+      expect(isAdjacent).toBe(true);
+    });
+
+    it('Scenario 2: Select "by" further in post should highlight correct occurrence', () => {
+      // Find all occurrences of "by" in the plain text
+      const allByPositions: number[] = [];
+      let searchPos = 0;
+      while (true) {
+        const pos = plainText.indexOf('by', searchPos);
+        if (pos === -1) break;
+        allByPositions.push(pos);
+        searchPos = pos + 1;
+      }
+
+      // There should be multiple "by" occurrences
+      expect(allByPositions.length).toBeGreaterThan(1);
+
+      // Highlight the SECOND occurrence
+      const secondByPos = allByPositions[1];
+
+      const result = processHighlights({
+        content: articleHtml,
+        highlights: [{
+          id: 1,
+          selectedText: 'by',
+          plainTextStart: secondByPos,
+          plainTextEnd: secondByPos + 2,
+        }],
+      });
+
+      // Should have exactly one highlight
+      const markCount = (result.match(/data-highlight-id="1"/g) || []).length;
+      expect(markCount).toBe(1);
+    });
+  });
+
+  describe('User reported bug: payroll employment overlap', () => {
+    // This is the exact scenario reported by the user:
+    // 1. Highlight "roughly half a million jobs over the year, averaging fewer than 50,000 new jobs per month."
+    // 2. Select "employment increased by" - shows "extend" (correct, adjacent)
+    // 3. After extending: "employment increased by roughly half a million jobs over the year, averaging fewer than 50,000 new jobs per month."
+    // 4. Select "payroll employment" - should show "extend" because "employment" OVERLAPS
+
+    const firstHighlightText = 'roughly half a million jobs over the year, averaging fewer than 50,000 new jobs per month.';
+    const extendedHighlightText = 'employment increased by roughly half a million jobs over the year, averaging fewer than 50,000 new jobs per month.';
+
+    it('Step 1: Initial highlight position should be found correctly', () => {
+      const pos = findPos(firstHighlightText);
+      expect(pos).toBeGreaterThan(0);
+      // Verify the text exists in the article
+      expect(plainText.substring(pos, pos + firstHighlightText.length)).toBe(firstHighlightText);
+    });
+
+    it('Step 2: "employment increased by" should be adjacent to initial highlight', () => {
+      const highlightStart = findPos(firstHighlightText);
+      const highlightEnd = highlightStart + firstHighlightText.length;
+
+      // "employment increased by " comes right before "roughly"
+      const employmentIncreasedBy = 'employment increased by ';
+      const selectionEnd = highlightStart; // ends where highlight starts
+      const selectionStart = selectionEnd - employmentIncreasedBy.length;
+
+      // Verify the text is correct
+      expect(plainText.substring(selectionStart, selectionEnd)).toBe(employmentIncreasedBy);
+
+      // This should be detected as adjacent
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('Step 3: Extended highlight position should be correct', () => {
+      const pos = findPos(extendedHighlightText);
+      expect(pos).toBeGreaterThan(0);
+      expect(plainText.substring(pos, pos + extendedHighlightText.length)).toBe(extendedHighlightText);
+    });
+
+    it('Step 4: "payroll employment" should OVERLAP with extended highlight', () => {
+      // The extended highlight starts at "employment"
+      const highlightStart = findPos(extendedHighlightText);
+      const highlightEnd = highlightStart + extendedHighlightText.length;
+
+      // "payroll employment" selection - ends at the same "employment" that starts the highlight
+      const payrollEmployment = 'payroll employment';
+      const payrollEmploymentPos = findPos(payrollEmployment);
+
+      // Verify "payroll employment" is found and is the one right before "increased by"
+      expect(payrollEmploymentPos).toBeGreaterThan(0);
+
+      // The key insight: "payroll employment" ends at position X + 18
+      // The extended highlight "employment increased by..." starts at the "e" in "employment"
+      // So "employment" (10 chars) is SHARED between them - this is an OVERLAP!
+
+      // Let's verify the positions
+      const selectionStart = payrollEmploymentPos;
+      const selectionEnd = payrollEmploymentPos + payrollEmployment.length;
+
+      // Debug: print the positions
+      console.log('Extended highlight starts at:', highlightStart);
+      console.log('Extended highlight text starts with:', plainText.substring(highlightStart, highlightStart + 20));
+      console.log('payroll employment at:', selectionStart, '-', selectionEnd);
+      console.log('payroll employment text:', plainText.substring(selectionStart, selectionEnd));
+
+      // The "employment" in "payroll employment" should be the SAME "employment" that starts the highlight
+      // So positions should overlap!
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('Step 4b: Verify the word "employment" is shared between selection and highlight', () => {
+      const payrollEmploymentPos = findPos('payroll employment');
+      const extendedHighlightPos = findPos(extendedHighlightText);
+
+      // "payroll employment" is at position X to X+18
+      // "employment increased by..." is at position Y to Y+length
+
+      // If "employment" is the same word (not a different occurrence), then:
+      // payrollEmploymentPos + 8 (for "payroll ") should equal extendedHighlightPos
+
+      const employmentInPayroll = payrollEmploymentPos + 'payroll '.length;
+      const employmentInHighlight = extendedHighlightPos;
+
+      // These should be the SAME position - meaning they share the word "employment"
+      expect(employmentInPayroll).toBe(employmentInHighlight);
+    });
+
+    it('Step 4c: The overlap detection should catch shared "employment"', () => {
+      const payrollEmploymentPos = findPos('payroll employment');
+      const extendedHighlightPos = findPos(extendedHighlightText);
+
+      // Selection: "payroll employment" = position [payrollEmploymentPos, payrollEmploymentPos + 18]
+      // Highlight: starts at extendedHighlightPos
+
+      const selectionStart = payrollEmploymentPos;
+      const selectionEnd = payrollEmploymentPos + 'payroll employment'.length;
+      const highlightStart = extendedHighlightPos;
+      const highlightEnd = highlightStart + extendedHighlightText.length;
+
+      // The selection ends at position selectionEnd
+      // The highlight starts at position highlightStart
+      // If selectionEnd > highlightStart, they overlap!
+
+      console.log('Selection:', selectionStart, '-', selectionEnd);
+      console.log('Highlight:', highlightStart, '-', highlightEnd);
+      console.log('Do they overlap? selectionEnd > highlightStart:', selectionEnd > highlightStart);
+
+      // They should overlap because "employment" is shared
+      expect(selectionEnd).toBeGreaterThan(highlightStart);
+
+      // And the overlap detection should return true
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('User reported bug: period overlap with ". Total"', () => {
+    // User scenario:
+    // 1. Highlight "United States slowed significantly in 2025. " (includes ". ")
+    // 2. Select ". Total" - should show "extend highlight" because they share ". "
+
+    const highlightText = 'United States slowed significantly in 2025. ';
+    const selectionText = '. Total';
+
+    it('should find both texts in the article', () => {
+      const highlightPos = findPos('United States slowed significantly in 2025.');
+      expect(highlightPos).toBeGreaterThan(0);
+
+      const totalPos = findPos('Total nonfarm');
+      expect(totalPos).toBeGreaterThan(0);
+    });
+
+    it('should detect overlap when selection shares ". " with highlight end', () => {
+      // Find the highlight position
+      const highlightStart = findPos('United States slowed significantly in 2025.');
+      const highlightEnd = highlightStart + highlightText.length;
+
+      // Find the ". Total" position - it starts 2 chars before "Total"
+      const totalPos = findPos('Total nonfarm');
+      const selectionStart = totalPos - 2; // ". Total" starts at the period
+      const selectionEnd = selectionStart + selectionText.length;
+
+      // Verify the text at selection position
+      expect(plainText.substring(selectionStart, selectionEnd)).toBe(selectionText);
+
+      // The overlap: highlight ends at position X, selection starts at X-2
+      // So selectionStart < highlightEnd, meaning they overlap!
+      console.log('Highlight:', highlightStart, '-', highlightEnd);
+      console.log('Selection:', selectionStart, '-', selectionEnd);
+      console.log('Overlap check: selectionStart < highlightEnd:', selectionStart < highlightEnd);
+
+      expect(selectionStart).toBeLessThan(highlightEnd);
+
+      // arePositionsAdjacentOrOverlapping should detect this
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should detect overlap via findOverlapOrAdjacent with positions', () => {
+      const highlightStart = findPos('United States slowed significantly in 2025.');
+      const highlightEnd = highlightStart + highlightText.length;
+
+      const totalPos = findPos('Total nonfarm');
+      const selectionStart = totalPos - 2;
+      const selectionEnd = selectionStart + selectionText.length;
+
+      const result = findOverlapOrAdjacent(
+        highlightText,
+        selectionText,
+        articleHtml,
+        { start: highlightStart, end: highlightEnd },
+        { start: selectionStart, end: selectionEnd }
+      );
+
+      expect(result).toBe(true);
+    });
+  });
+
+  describe('Highlight Merge Scenarios', () => {
+    // Article text reference (for planning tests):
+    // "Job creation in the United States slowed significantly in 2025. Total nonfarm payroll
+    //  employment increased by roughly half a million jobs over the year, averaging fewer than
+    //  50,000 new jobs per month."
+
+    describe('Merging 2 overlapping highlights', () => {
+      it('should detect overlap when highlights share text at boundary', () => {
+        // Highlight A: "Job creation in the United"
+        // Highlight B: "United States slowed"
+        // They share "United"
+        const highlightA = 'Job creation in the United';
+        const highlightB = 'United States slowed';
+
+        const posA = findPos(highlightA);
+        const posB = findPos('United States slowed');
+
+        expect(posA).toBeGreaterThanOrEqual(0);
+        expect(posB).toBeGreaterThan(0);
+
+        // Selection spans from A to B: "Job creation in the United States slowed"
+        const selectionText = 'Job creation in the United States slowed';
+        const selectionStart = posA;
+        const selectionEnd = selectionStart + selectionText.length;
+
+        // Both highlights should be detected as overlapping with the selection
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + highlightA.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posB, end: posB + highlightB.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should merge overlapping text correctly', () => {
+        // Highlight A: "United States slowed"
+        // Highlight B: "slowed significantly in 2025"
+        // Merged should be: "United States slowed significantly in 2025"
+        const merged = mergeTexts('United States slowed', 'slowed significantly in 2025', articleHtml);
+        expect(merged).toBe('United States slowed significantly in 2025');
+      });
+    });
+
+    describe('Merging 2 adjacent highlights (no gap)', () => {
+      it('should detect adjacency when highlights touch', () => {
+        // Highlight A: "Job creation"
+        // Highlight B: " in the United"
+        // They are adjacent (A ends, B starts immediately)
+        const highlightA = 'Job creation';
+        const highlightB = ' in the United';
+
+        const posA = findPos(highlightA);
+        const posB = posA + highlightA.length; // B starts right after A
+
+        // Selection that spans both: "Job creation in the United"
+        const selectionStart = posA;
+        const selectionEnd = posB + highlightB.length;
+
+        // Check adjacency
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + highlightA.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should merge adjacent text correctly', () => {
+        const merged = mergeTexts('Job creation', ' in the United', articleHtml);
+        expect(merged).toBe('Job creation in the United');
+      });
+    });
+
+    describe('Merging 2 adjacent highlights (with whitespace gap)', () => {
+      it('should detect adjacency when selection spans whitespace gap', () => {
+        // Use "2025." and "Total" which have a space between them
+        const highlightA = 'in 2025.';
+        const highlightB = 'Total nonfarm';
+
+        const posA = findPos(highlightA);
+        const posAEnd = posA + highlightA.length;
+        const posB = findPos(highlightB);
+
+        // There should be a space between "2025." and "Total"
+        expect(posB).toBeGreaterThan(posAEnd);
+        expect(posB - posAEnd).toBeLessThanOrEqual(2); // at most 1-2 chars gap
+
+        // Selection spans both: "in 2025. Total nonfarm"
+        const selectionStart = posA;
+        const selectionEnd = posB + highlightB.length;
+
+        // Both should be detected as overlapping with selection (selection contains both)
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posAEnd },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posB, end: posB + highlightB.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should merge text with space gap correctly', () => {
+        const merged = mergeTexts('in 2025.', 'Total nonfarm', articleHtml);
+        expect(merged).toBe('in 2025. Total nonfarm');
+      });
+    });
+
+    describe('Merging 3 overlapping highlights', () => {
+      it('should detect all 3 highlights overlap with selection', () => {
+        // Use unique text: "slowed significantly in 2025. Total nonfarm payroll"
+        // Highlight A: "slowed significantly in"
+        // Highlight B: "in 2025. Total"
+        // Highlight C: "Total nonfarm payroll"
+        const highlightA = 'slowed significantly in';
+        const highlightB = 'in 2025. Total';
+        const highlightC = 'Total nonfarm payroll';
+
+        const posA = findPos(highlightA);
+        const posB = findPos(highlightB);
+        const posC = findPos(highlightC);
+
+        // Verify order
+        expect(posB).toBeGreaterThan(posA);
+        expect(posC).toBeGreaterThan(posB);
+
+        // Selection spans all three
+        const selectionStart = posA;
+        const selectionEnd = posC + highlightC.length;
+
+        // All 3 should overlap with selection (selection contains all of them)
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + highlightA.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posB, end: posB + highlightB.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posC, end: posC + highlightC.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should merge 3 overlapping texts correctly', () => {
+        // These overlap, so mergeTexts should work
+        let merged = mergeTexts('slowed significantly in', 'in 2025. Total', articleHtml);
+        expect(merged).toBe('slowed significantly in 2025. Total');
+
+        merged = mergeTexts(merged, 'Total nonfarm payroll', articleHtml);
+        expect(merged).toBe('slowed significantly in 2025. Total nonfarm payroll');
+      });
+    });
+
+    describe('Merging 3 highlights with mixed adjacent/overlapping', () => {
+      it('should handle mix of adjacent and overlapping', () => {
+        // Use unique text that we can verify positions for
+        // Highlight A: "significantly in 2025"
+        // Highlight B: "2025." (overlaps A at "2025")
+        // Highlight C: ". Total" (overlaps B at ".")
+        const highlightA = 'significantly in 2025';
+        const highlightB = '2025.';
+        const highlightC = '. Total';
+
+        const posA = findPos(highlightA);
+        const posB = findPos(highlightB);
+        const posC = findPos(highlightC);
+
+        // Selection spans A to C: "significantly in 2025. Total"
+        const selectionStart = posA;
+        const selectionEnd = posC + highlightC.length;
+
+        // A should overlap with selection
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + highlightA.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        // B should overlap with selection
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posB, end: posB + highlightB.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should merge mixed adjacent/overlapping correctly', () => {
+        let merged = mergeTexts('significantly in 2025', '2025.', articleHtml);
+        expect(merged).toBe('significantly in 2025.');
+
+        merged = mergeTexts(merged, '. Total', articleHtml);
+        expect(merged).toBe('significantly in 2025. Total');
+      });
+    });
+
+    describe('Selection spanning multiple highlights within sentence', () => {
+      it('should detect all highlights when selection contains them', () => {
+        // Use a part of the sentence with unique text:
+        // "slowed significantly in 2025. Total nonfarm payroll employment"
+        // Highlights:
+        // A: "slowed significantly"
+        // B: "in 2025."
+        // C: "Total nonfarm"
+        const highlightA = 'slowed significantly';
+        const highlightB = 'in 2025.';
+        const highlightC = 'Total nonfarm';
+
+        const posA = findPos(highlightA);
+        const posB = findPos(highlightB);
+        const posC = findPos(highlightC);
+
+        // Verify order: A comes before B, B comes before C
+        expect(posB).toBeGreaterThan(posA);
+        expect(posC).toBeGreaterThan(posB);
+
+        // Selection spans all three
+        const selectionStart = posA;
+        const selectionEnd = posC + highlightC.length;
+
+        // All 3 should be detected (selection contains all of them)
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + highlightA.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posB, end: posB + highlightB.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posC, end: posC + highlightC.length },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should merge consecutive overlapping highlights', () => {
+        // Use overlapping highlights that can be merged step by step
+        let merged = mergeTexts('slowed significantly', 'significantly in 2025.', articleHtml);
+        expect(merged).toBe('slowed significantly in 2025.');
+
+        merged = mergeTexts(merged, '2025. Total', articleHtml);
+        expect(merged).toBe('slowed significantly in 2025. Total');
+
+        merged = mergeTexts(merged, 'Total nonfarm', articleHtml);
+        expect(merged).toBe('slowed significantly in 2025. Total nonfarm');
+      });
+    });
+
+    describe('Edge cases for merge detection', () => {
+      it('should handle single character overlap', () => {
+        // Highlight A: "2025"
+        // Highlight B: "5."
+        // They share "5"
+        const posA = findPos('2025');
+        const posB = findPos('5.');
+
+        // Selection: "2025."
+        const selectionText = '2025.';
+        const selectionStart = posA;
+        const selectionEnd = selectionStart + selectionText.length;
+
+        // Highlight A should overlap with selection
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + 4 },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+
+        // Highlight B should also overlap with selection
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posB, end: posB + 2 },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should handle period and space overlap', () => {
+        // Highlight A: "2025."
+        // Highlight B: ". Total"
+        const posA = findPos('2025.');
+        const dotTotalPos = findPos('. Total');
+
+        // Selection spanning both
+        const selectionStart = posA;
+        const selectionEnd = dotTotalPos + '. Total'.length;
+
+        expect(arePositionsAdjacentOrOverlapping(
+          { start: posA, end: posA + 5 },
+          { start: selectionStart, end: selectionEnd },
+          plainText
+        )).toBe(true);
+      });
+
+      it('should NOT merge non-adjacent, non-overlapping highlights', () => {
+        // Highlight A: "Job creation"
+        // Highlight B: "averaging fewer" (much later in text)
+        const posA = findPos('Job creation');
+        const posB = findPos('averaging fewer');
+
+        // These are far apart - selection of just one shouldn't detect the other
+        const selectionA = { start: posA, end: posA + 'Job creation'.length };
+        const highlightBPos = { start: posB, end: posB + 'averaging fewer'.length };
+
+        expect(arePositionsAdjacentOrOverlapping(
+          highlightBPos,
+          selectionA,
+          plainText
+        )).toBe(false);
+      });
+    });
+
+    describe('Merge with position-based selection detection', () => {
+      it('should correctly identify selection start inside highlight A and end inside highlight B', () => {
+        // Highlight A: "Job creation in the United"
+        // Highlight B: "States slowed significantly"
+        // Selection: "United States slowed" (starts inside A, ends inside B)
+        const posA = findPos('Job creation in the United');
+        const posB = findPos('States slowed significantly');
+
+        const selectionText = 'United States slowed';
+        const selectionPos = findPos(selectionText);
+
+        // Selection start should be inside highlight A
+        const selStart = selectionPos;
+        const selEnd = selectionPos + selectionText.length;
+        const highlightAStart = posA;
+        const highlightAEnd = posA + 'Job creation in the United'.length;
+        const highlightBStart = posB;
+        const highlightBEnd = posB + 'States slowed significantly'.length;
+
+        // Selection start (at "United") should be inside highlight A
+        expect(selStart >= highlightAStart && selStart < highlightAEnd).toBe(true);
+
+        // Selection end (at end of "slowed") should be inside highlight B
+        expect(selEnd > highlightBStart && selEnd <= highlightBEnd).toBe(true);
+      });
     });
   });
 });

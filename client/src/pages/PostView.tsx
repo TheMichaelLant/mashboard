@@ -31,7 +31,89 @@ import {
   processHighlights,
   findOverlapOrAdjacent,
   mergeTexts,
+  SelectionPosition,
+  stripHtmlWithSpaces,
 } from '../utils/highlightProcessor';
+
+/**
+ * Block-level tags that should have spaces between them (matching highlightProcessor)
+ */
+const BLOCK_TAGS = new Set([
+  'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6',
+  'UL', 'OL', 'LI', 'BLOCKQUOTE', 'PRE', 'HR', 'BR',
+  'TABLE', 'TR', 'TD', 'TH', 'THEAD', 'TBODY', 'TFOOT',
+  'ARTICLE', 'SECTION', 'HEADER', 'FOOTER', 'NAV', 'ASIDE',
+  'FIGURE', 'FIGCAPTION', 'MAIN', 'ADDRESS', 'DD', 'DL', 'DT',
+]);
+
+/**
+ * Finds the closest block-level ancestor of a node
+ */
+function getClosestBlockAncestor(node: Node, container: Element): Element | null {
+  let current: Element | null = node.parentElement;
+  while (current && current !== container) {
+    if (BLOCK_TAGS.has(current.tagName)) {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Calculates the plain text offset from the start of a container element to a specific node/offset
+ * Accounts for spaces between block elements (matching stripHtmlWithSpaces behavior)
+ */
+function getPlainTextOffset(containerElement: Element, targetNode: Node, targetOffset: number): number {
+  let offset = 0;
+  let prevTextNode: Node | null = null;
+  let prevBlockAncestor: Element | null = null;
+
+  const walker = document.createTreeWalker(
+    containerElement,
+    NodeFilter.SHOW_TEXT,
+    null
+  );
+
+  let currentNode = walker.nextNode();
+  while (currentNode) {
+    // Check if we crossed a block boundary
+    const currBlockAncestor = getClosestBlockAncestor(currentNode, containerElement);
+
+    if (prevTextNode && prevBlockAncestor !== currBlockAncestor) {
+      // We crossed from one block element to another - add a space
+      offset += 1;
+    }
+
+    if (currentNode === targetNode) {
+      return offset + targetOffset;
+    }
+
+    offset += (currentNode.textContent || '').length;
+    prevTextNode = currentNode;
+    prevBlockAncestor = currBlockAncestor;
+
+    currentNode = walker.nextNode();
+  }
+
+  // If target node not found, return -1
+  return -1;
+}
+
+/**
+ * Gets the plain text position of a Range relative to a container element
+ */
+function getRangePositionInPlainText(
+  containerElement: Element,
+  range: Range
+): SelectionPosition | null {
+  const start = getPlainTextOffset(containerElement, range.startContainer, range.startOffset);
+  const end = getPlainTextOffset(containerElement, range.endContainer, range.endOffset);
+
+  if (start === -1 || end === -1) return null;
+
+  return { start, end };
+}
 
 export default function PostView() {
   const { id } = useParams<{ id: string }>();
@@ -51,7 +133,12 @@ export default function PostView() {
     text: string;
     start: number;
     end: number;
+    /** Plain text position of selection start */
+    plainTextStart?: number;
+    /** Plain text position of selection end */
+    plainTextEnd?: number;
   } | null>(null);
+  const articleRef = useRef<HTMLElement>(null);
   const [showHighlightMenu, setShowHighlightMenu] = useState(false);
   const [highlightPosition, setHighlightPosition] = useState({ x: 0, y: 0 });
   const [showHighlightsInContent, setShowHighlightsInContent] = useState(true);
@@ -315,7 +402,27 @@ export default function PostView() {
 
   // Helper function to check if selected text is contained within an existing highlight
   // Returns the position: 'start', 'middle', 'end', or null if not contained
-  const getContainmentPosition = useCallback((highlight: Highlight, selection: string): 'start' | 'middle' | 'end' | null => {
+  // Uses position-based checking when position info is available
+  const getContainmentPosition = useCallback((
+    highlight: Highlight,
+    selection: string,
+    selectionStart?: number,
+    selectionEnd?: number
+  ): 'start' | 'middle' | 'end' | null => {
+    // Use position-based containment check when we have position info
+    if (selectionStart !== undefined && selectionEnd !== undefined &&
+        highlight.startOffset !== undefined && highlight.endOffset !== undefined) {
+      // Check if selection is fully contained within the highlight's position range
+      const isContained = selectionStart >= highlight.startOffset && selectionEnd <= highlight.endOffset;
+      if (!isContained) return null;
+
+      // Check position within highlight
+      if (selectionStart === highlight.startOffset) return 'start';
+      if (selectionEnd === highlight.endOffset) return 'end';
+      return 'middle';
+    }
+
+    // Fall back to text-based check when positions aren't available
     const highlightText = highlight.selectedText;
 
     // Check if selection is fully contained within the highlight
@@ -342,18 +449,68 @@ export default function PostView() {
     }
 
     const text = selection.toString().trim();
-    if (text.length > 0) {
+    if (text.length > 0 && articleRef.current) {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
 
+      // Get the prose container (the actual content container, not the article wrapper)
+      const proseContainer = articleRef.current.querySelector('.prose') || articleRef.current;
+
+      // Calculate plain text position of the selection
+      // IMPORTANT: We need positions based on the ORIGINAL content (before processHighlights adds spaces)
+      // The DOM position is affected by processHighlights modifications, so we recalculate
+      // using the original content's plain text representation
+      const domPosition = getRangePositionInPlainText(proseContainer, range);
+
+      // Get the original plain text (same as what highlights were stored against)
+      const originalPlainText = stripHtmlWithSpaces(currentContent);
+
+      // Find the selection text in the original content
+      // Use the DOM position as a hint to find the closest occurrence
+      let plainTextPosition: SelectionPosition | null = null;
+      const textOccurrences: number[] = [];
+      let searchStart = 0;
+      while (true) {
+        const idx = originalPlainText.indexOf(text, searchStart);
+        if (idx === -1) break;
+        textOccurrences.push(idx);
+        searchStart = idx + 1;
+      }
+
+      if (textOccurrences.length === 1) {
+        // Only one occurrence, use it directly
+        plainTextPosition = { start: textOccurrences[0], end: textOccurrences[0] + text.length };
+      } else if (textOccurrences.length > 1 && domPosition) {
+        // Multiple occurrences - find the one closest to the DOM position
+        const closest = textOccurrences.reduce((prev, curr) => {
+          const prevDiff = Math.abs(prev - domPosition.start);
+          const currDiff = Math.abs(curr - domPosition.start);
+          return currDiff < prevDiff ? curr : prev;
+        });
+        plainTextPosition = { start: closest, end: closest + text.length };
+      } else if (textOccurrences.length > 1) {
+        // Multiple occurrences, no DOM hint - use first occurrence
+        plainTextPosition = { start: textOccurrences[0], end: textOccurrences[0] + text.length };
+      }
+
       // Check if this text overlaps OR is adjacent to ANY existing highlights
-      const overlapping = highlights.filter((h) => findOverlapOrAdjacent(h.selectedText, text, currentContent));
+      // Use position-aware detection when we have position info for the selection
+      const selectionPos = plainTextPosition || undefined;
+      const overlapping = highlights.filter((h) => {
+        // If we have position info for both the highlight and selection, use it
+        const highlightPos = h.startOffset !== undefined && h.endOffset !== undefined
+          ? { start: h.startOffset, end: h.endOffset } as SelectionPosition
+          : undefined;
+        return findOverlapOrAdjacent(h.selectedText, text, currentContent, highlightPos, selectionPos);
+      });
       setOverlappingHighlights(overlapping);
 
       setSelectedText({
         text,
         start: range.startOffset,
         end: range.endOffset,
+        plainTextStart: plainTextPosition?.start,
+        plainTextEnd: plainTextPosition?.end,
       });
       setHighlightPosition({
         x: rect.left + rect.width / 2,
@@ -368,7 +525,15 @@ export default function PostView() {
     if (!post || !selectedText || !isSignedIn || isCreatingHighlight) return;
 
     // Check for overlap or adjacency - don't allow, user should use "Extend" instead
-    const hasOverlapOrAdjacent = highlights.some((h) => findOverlapOrAdjacent(h.selectedText, selectedText.text, currentContent));
+    const selectionPos = selectedText.plainTextStart !== undefined && selectedText.plainTextEnd !== undefined
+      ? { start: selectedText.plainTextStart, end: selectedText.plainTextEnd } as SelectionPosition
+      : undefined;
+    const hasOverlapOrAdjacent = highlights.some((h) => {
+      const highlightPos = h.startOffset !== undefined && h.endOffset !== undefined
+        ? { start: h.startOffset, end: h.endOffset } as SelectionPosition
+        : undefined;
+      return findOverlapOrAdjacent(h.selectedText, selectedText.text, currentContent, highlightPos, selectionPos);
+    });
     if (hasOverlapOrAdjacent) {
       // If there's an overlap or adjacency, user should use "Extend" instead
       setShowHighlightMenu(false);
@@ -378,12 +543,13 @@ export default function PostView() {
 
     setIsCreatingHighlight(true);
     try {
+      // Use plain text positions for startOffset/endOffset to enable position-aware highlighting
       const newHighlight = await highlightApi.create({
         postId: post.id,
         chapterId: post.type === 'book' ? post.chapters?.[currentChapter]?.id : undefined,
         selectedText: selectedText.text,
-        startOffset: selectedText.start,
-        endOffset: selectedText.end,
+        startOffset: selectedText.plainTextStart ?? selectedText.start,
+        endOffset: selectedText.plainTextEnd ?? selectedText.end,
       });
       setHighlights((prev) => [...prev, newHighlight]);
       setShowHighlightMenu(false);
@@ -423,19 +589,34 @@ export default function PostView() {
       return;
     }
 
+    // Calculate the merged highlight's position by finding min start and max end
+    // across all overlapping highlights and the current selection
+    let mergedStart = selectedText.plainTextStart ?? selectedText.start;
+    let mergedEnd = selectedText.plainTextEnd ?? selectedText.end;
+    for (const h of overlappingHighlights) {
+      if (h.startOffset !== undefined && h.endOffset !== undefined) {
+        if (h.startOffset < mergedStart) {
+          mergedStart = h.startOffset;
+        }
+        if (h.endOffset > mergedEnd) {
+          mergedEnd = h.endOffset;
+        }
+      }
+    }
+
     setIsCreatingHighlight(true);
     try {
       // Delete all old overlapping highlights
       const highlightIdsToDelete = overlappingHighlights.map((h) => h.id);
       await Promise.all(highlightIdsToDelete.map((id) => highlightApi.delete(id)));
 
-      // Create a new highlight with the merged text
+      // Create a new highlight with the merged text and correct position
       const newHighlight = await highlightApi.create({
         postId: post.id,
         chapterId: post.type === 'book' ? post.chapters?.[currentChapter]?.id : undefined,
         selectedText: mergedText,
-        startOffset: selectedText.start,
-        endOffset: selectedText.end,
+        startOffset: mergedStart,
+        endOffset: mergedEnd,
       });
 
       // Update state: remove all old highlights, add new one
@@ -458,18 +639,30 @@ export default function PostView() {
     const existingHighlight = overlappingHighlights[0];
     if (!post || !selectedText || !isSignedIn || !existingHighlight || isCreatingHighlight) return;
 
-    const position = getContainmentPosition(existingHighlight, selectedText.text);
+    const position = getContainmentPosition(
+      existingHighlight,
+      selectedText.text,
+      selectedText.plainTextStart,
+      selectedText.plainTextEnd
+    );
     if (!position || position === 'middle') return; // Can only shrink from start/end
 
     setIsCreatingHighlight(true);
     try {
       let newText: string;
+      let newStartOffset: number;
+      let newEndOffset: number;
+
       if (position === 'start') {
-        // Remove from beginning
+        // Remove from beginning - shift start offset forward
         newText = existingHighlight.selectedText.slice(selectedText.text.length);
+        newStartOffset = existingHighlight.startOffset + selectedText.text.length;
+        newEndOffset = existingHighlight.endOffset;
       } else {
-        // Remove from end
+        // Remove from end - shift end offset backward
         newText = existingHighlight.selectedText.slice(0, -selectedText.text.length);
+        newStartOffset = existingHighlight.startOffset;
+        newEndOffset = existingHighlight.endOffset - selectedText.text.length;
       }
 
       // Delete the old highlight
@@ -481,8 +674,8 @@ export default function PostView() {
           postId: post.id,
           chapterId: post.type === 'book' ? post.chapters?.[currentChapter]?.id : undefined,
           selectedText: newText,
-          startOffset: selectedText.start,
-          endOffset: selectedText.end,
+          startOffset: newStartOffset,
+          endOffset: newEndOffset,
         });
         setHighlights((prev) => [
           ...prev.filter((h) => h.id !== existingHighlight.id),
@@ -508,7 +701,12 @@ export default function PostView() {
     const existingHighlight = overlappingHighlights[0];
     if (!post || !selectedText || !isSignedIn || !existingHighlight || isCreatingHighlight) return;
 
-    const position = getContainmentPosition(existingHighlight, selectedText.text);
+    const position = getContainmentPosition(
+      existingHighlight,
+      selectedText.text,
+      selectedText.plainTextStart,
+      selectedText.plainTextEnd
+    );
     if (position !== 'middle') return; // Can only split if selection is in middle
 
     setIsCreatingHighlight(true);
@@ -601,7 +799,12 @@ export default function PostView() {
 
     return processHighlights({
       content: currentContent,
-      highlights: highlights.map(h => ({ id: h.id, selectedText: h.selectedText })),
+      highlights: highlights.map(h => ({
+        id: h.id,
+        selectedText: h.selectedText,
+        plainTextStart: h.startOffset,
+        plainTextEnd: h.endOffset,
+      })),
     });
   }, [currentContent, highlights, showHighlightsInContent]);
 
@@ -787,6 +990,7 @@ export default function PostView() {
       ) : (
         /* Post Content */
         <article
+          ref={articleRef}
           className={`${
             post.type === 'line'
               ? 'font-display text-3xl md:text-4xl leading-relaxed text-ink-100'
@@ -815,10 +1019,48 @@ export default function PostView() {
           {overlappingHighlights.length > 0 ? (
             (() => {
               const firstHighlight = overlappingHighlights[0];
-              const containmentPosition = getContainmentPosition(firstHighlight, selectedText.text);
+              const containmentPosition = getContainmentPosition(
+                firstHighlight,
+                selectedText.text,
+                selectedText.plainTextStart,
+                selectedText.plainTextEnd
+              );
 
-              // Multiple overlapping highlights - offer to merge all
-              if (overlappingHighlights.length > 1) {
+              // Check if selection spans DIFFERENT highlights (for merge)
+              // Merge requires: selection start in highlight A, selection end in highlight B (A ≠ B)
+              const selStart = selectedText.plainTextStart;
+              const selEnd = selectedText.plainTextEnd;
+              let startHighlight: Highlight | null = null;
+              let endHighlight: Highlight | null = null;
+
+              if (selStart !== undefined && selEnd !== undefined) {
+                for (const h of overlappingHighlights) {
+                  if (h.startOffset !== undefined && h.endOffset !== undefined) {
+                    // Check if selection start is inside OR adjacent to this highlight's end
+                    // Adjacent means selection start is at or just after highlight end (within 1 char for whitespace)
+                    const startInsideOrAdjacentToEnd =
+                      (selStart >= h.startOffset && selStart < h.endOffset) || // inside
+                      (selStart >= h.endOffset && selStart <= h.endOffset + 1); // adjacent to end
+
+                    // Check if selection end is inside OR adjacent to this highlight's start
+                    const endInsideOrAdjacentToStart =
+                      (selEnd > h.startOffset && selEnd <= h.endOffset) || // inside
+                      (selEnd >= h.startOffset - 1 && selEnd <= h.startOffset); // adjacent to start
+
+                    if (startInsideOrAdjacentToEnd) {
+                      startHighlight = h;
+                    }
+                    if (endInsideOrAdjacentToStart) {
+                      endHighlight = h;
+                    }
+                  }
+                }
+              }
+
+              // Merge: selection spans from one highlight to a different one
+              const shouldMerge = startHighlight && endHighlight && startHighlight.id !== endHighlight.id;
+
+              if (shouldMerge) {
                 return (
                   <div className="flex flex-col">
                     <button
