@@ -144,6 +144,7 @@ export default function PostView() {
   const articleRef = useRef<HTMLElement>(null);
   const [showHighlightMenu, setShowHighlightMenu] = useState(false);
   const [highlightPosition, setHighlightPosition] = useState({ x: 0, y: 0 });
+  const [selectionWarning, setSelectionWarning] = useState<string | null>(null);
   const [showHighlightsInContent, setShowHighlightsInContent] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredHighlightId, setHoveredHighlightId] = useState<number | null>(null);
@@ -458,17 +459,36 @@ export default function PostView() {
       // Get the prose container (the actual content container, not the article wrapper)
       const proseContainer = articleRef.current.querySelector('.prose') || articleRef.current;
 
-      // Only allow selections that are at least partially within the post content area
-      // If selection is entirely outside the post, ignore it
+      // Selection must be ENTIRELY within the post content area
+      // If selection extends outside (e.g., into UI elements), ignore it
       const startInPost = proseContainer.contains(range.startContainer);
       const endInPost = proseContainer.contains(range.endContainer);
-      if (!startInPost && !endInPost) {
+
+      if (DEBUG_HIGHLIGHTS) {
+        console.log('=== Selection Boundary Check ===');
+        console.log('Start in post:', startInPost, '| End in post:', endInPost);
+      }
+
+      if (!startInPost || !endInPost) {
+        if (DEBUG_HIGHLIGHTS) {
+          console.log('Selection extends outside post, ignoring');
+        }
         setShowHighlightMenu(false);
         setOverlappingHighlights([]);
+
+        // Show warning briefly
+        const rect = range.getBoundingClientRect();
+        setHighlightPosition({
+          x: rect.left + rect.width / 2,
+          y: rect.top - 10,
+        });
+        setSelectionWarning('Selection must be within post content');
+        setTimeout(() => setSelectionWarning(null), 2000);
         return;
       }
 
       const rect = range.getBoundingClientRect();
+      setSelectionWarning(null); // Clear any previous warning
 
       // Calculate plain text position of the selection
       // IMPORTANT: We need positions based on the ORIGINAL content (before processHighlights adds spaces)
@@ -1112,6 +1132,20 @@ export default function PostView() {
             dangerouslySetInnerHTML={{ __html: processedContent }}
           />
         </article>
+      )}
+
+      {/* Selection Warning */}
+      {selectionWarning && (
+        <div
+          className="fixed bg-ink-900 border border-amber-500/50 text-amber-400 rounded-lg shadow-xl px-3 py-2 z-50 text-sm select-none pointer-events-none"
+          style={{
+            left: highlightPosition.x,
+            top: highlightPosition.y,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          {selectionWarning}
+        </div>
       )}
 
       {/* Highlight Menu */}
