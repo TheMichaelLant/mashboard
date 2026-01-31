@@ -181,6 +181,13 @@
   @apply bg-gold-600/50;
 }
 
+/* Inline delete button for highlights */
+.highlight-delete-btn {
+  pointer-events: auto;
+  cursor: pointer;
+  line-height: 0;
+}
+
 /* Flash animation for scrolling to a highlight */
 .highlight-flash {
   animation: highlight-pulse 2s ease-in-out;

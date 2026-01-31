@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   X,
+  XCircle,
   Maximize2,
 } from 'lucide-react';
 import {
@@ -54,6 +55,9 @@ export default function PostView() {
   const [showHighlightMenu, setShowHighlightMenu] = useState(false);
   const [highlightPosition, setHighlightPosition] = useState({ x: 0, y: 0 });
   const [showHighlightsInContent, setShowHighlightsInContent] = useState(true);
+  const [isDragging, setIsDragging] = useState(false);
+  const [hoveredHighlightId, setHoveredHighlightId] = useState<number | null>(null);
+  const [deleteButtonPosition, setDeleteButtonPosition] = useState<{ x: number; y: number } | null>(null);
   const highlightMenuRef = useRef<HTMLDivElement>(null);
 
   // Calculate current content (moved early for use in callbacks)
@@ -136,6 +140,7 @@ export default function PostView() {
   }, [highlightTextParam, loading, setSearchParams]);
 
   // Handle group hover for split highlights (marks with same data-highlight-id)
+  // Also positions the delete button at the tail end of the highlight
   useEffect(() => {
     const handleMarkHover = (e: Event) => {
       const target = e.target;
@@ -148,6 +153,17 @@ export default function PostView() {
       // Add hover class to all marks with the same highlight ID
       const relatedMarks = document.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
       relatedMarks.forEach(m => m.classList.add('highlight-group-hover'));
+
+      // Find the last mark (tail end) and position delete button there
+      const lastMark = relatedMarks[relatedMarks.length - 1];
+      if (lastMark) {
+        const rect = lastMark.getBoundingClientRect();
+        setDeleteButtonPosition({
+          x: rect.right - 10,
+          y: rect.top + rect.height / 2,
+        });
+        setHoveredHighlightId(parseInt(highlightId));
+      }
     };
 
     const handleMarkLeave = (e: Event) => {
@@ -158,9 +174,27 @@ export default function PostView() {
       const highlightId = target.dataset.highlightId;
       if (!highlightId) return;
 
+      // Check if we're moving to another mark with the same highlight ID
+      const relatedEvent = e as MouseEvent;
+      const relatedTarget = relatedEvent.relatedTarget;
+      if (relatedTarget instanceof HTMLElement) {
+        if (relatedTarget.classList?.contains('highlight-mark') &&
+            relatedTarget.dataset.highlightId === highlightId) {
+          return; // Still within the same highlight group
+        }
+        // Check if moving to the delete button
+        if (relatedTarget.closest('.highlight-delete-btn')) {
+          return; // Moving to delete button, keep showing
+        }
+      }
+
       // Remove hover class from all marks with the same highlight ID
       const relatedMarks = document.querySelectorAll(`[data-highlight-id="${highlightId}"]`);
       relatedMarks.forEach(m => m.classList.remove('highlight-group-hover'));
+
+      // Hide delete button
+      setHoveredHighlightId(null);
+      setDeleteButtonPosition(null);
     };
 
     // Use event delegation on the article content
@@ -170,6 +204,31 @@ export default function PostView() {
     return () => {
       document.removeEventListener('mouseenter', handleMarkHover, true);
       document.removeEventListener('mouseleave', handleMarkLeave, true);
+    };
+  }, []);
+
+  // Track dragging state to suppress delete button during text selection
+  useEffect(() => {
+    const handleMouseDown = () => {
+      setIsDragging(true);
+      // Hide delete button when starting to drag
+      setHoveredHighlightId(null);
+      setDeleteButtonPosition(null);
+    };
+
+    const handleMouseUp = () => {
+      // Small delay to allow text selection to complete
+      setTimeout(() => {
+        setIsDragging(false);
+      }, 100);
+    };
+
+    document.addEventListener('mousedown', handleMouseDown);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousedown', handleMouseDown);
+      document.removeEventListener('mouseup', handleMouseUp);
     };
   }, []);
 
@@ -871,6 +930,46 @@ export default function PostView() {
             </button>
           )}
         </div>
+      )}
+
+      {/* Hover Delete Button for Highlights */}
+      {hoveredHighlightId !== null && deleteButtonPosition && !isDragging && (
+        <button
+          className="highlight-delete-btn fixed z-50 rounded-full bg-ink-800 border border-ink-600 text-ink-400 hover:text-red-400 hover:border-red-500 hover:bg-red-900/30 transition-colors shadow-lg"
+          style={{
+            left: deleteButtonPosition.x,
+            top: deleteButtonPosition.y,
+            transform: 'translate(-50%, -50%)',
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteHighlight(hoveredHighlightId);
+            setHoveredHighlightId(null);
+            setDeleteButtonPosition(null);
+            // Remove hover class from marks
+            document.querySelectorAll('.highlight-group-hover').forEach(m => {
+              m.classList.remove('highlight-group-hover');
+            });
+          }}
+          onMouseLeave={(e) => {
+            // Check if moving back to a highlight mark
+            const relatedTarget = e.relatedTarget;
+            if (relatedTarget instanceof HTMLElement &&
+                relatedTarget.classList?.contains('highlight-mark') &&
+                relatedTarget.dataset.highlightId === String(hoveredHighlightId)) {
+              return; // Moving back to the highlight, keep showing
+            }
+            // Hide button and remove hover styling
+            setHoveredHighlightId(null);
+            setDeleteButtonPosition(null);
+            document.querySelectorAll('.highlight-group-hover').forEach(m => {
+              m.classList.remove('highlight-group-hover');
+            });
+          }}
+          title="Delete highlight"
+        >
+          <XCircle size={18} />
+        </button>
       )}
 
       {/* Action Bar */}

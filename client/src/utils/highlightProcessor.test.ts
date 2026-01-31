@@ -405,6 +405,188 @@ describe('processHighlights', () => {
       expect(result).toContain('data-highlight-id="1"');
     });
 
+    // Headings
+    it('should handle h1 headings', () => {
+      const result = processHighlights({
+        content: '<h1>Main Title of the Article</h1><p>Some content follows.</p>',
+        highlights: [{ id: 1, selectedText: 'Main Title' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+      expect(result).toContain('<h1>');
+    });
+
+    it('should handle h2 headings', () => {
+      const result = processHighlights({
+        content: '<h2>Section Heading Here</h2><p>Paragraph text.</p>',
+        highlights: [{ id: 1, selectedText: 'Section Heading' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle h3 headings', () => {
+      const result = processHighlights({
+        content: '<h3>Subsection Title</h3><p>More text here.</p>',
+        highlights: [{ id: 1, selectedText: 'Subsection Title' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle highlight spanning heading and paragraph with whitespace', () => {
+      // When block elements have whitespace between them in the HTML, highlighting works
+      const result = processHighlights({
+        content: '<h2>Introduction</h2>\n<p>Welcome to the guide.</p>',
+        highlights: [{ id: 1, selectedText: 'Introduction Welcome to' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle highlight spanning h3 to p without whitespace in HTML', () => {
+      // This tests the exact bug scenario: </h3><p> with no whitespace between tags
+      // Browser selection includes a space, but raw HTML doesn't have one
+      const result = processHighlights({
+        content: '<h3>Unemployment Rate Trends</h3><p>The national unemployment rate gradually increased.</p>',
+        highlights: [{ id: 1, selectedText: 'Unemployment Rate Trends The national unemployment' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle highlight within heading only', () => {
+      const result = processHighlights({
+        content: '<h2>Introduction to the Topic</h2><p>Welcome to the guide.</p>',
+        highlights: [{ id: 1, selectedText: 'Introduction to the' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    // Unordered lists (ul/li)
+    it('should handle unordered list with multiple items', () => {
+      const result = processHighlights({
+        content: '<ul><li>Apple</li><li>Banana</li><li>Cherry</li></ul>',
+        highlights: [{ id: 1, selectedText: 'Banana' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+      expect(result).toContain('<ul>');
+      expect(result).toContain('<li>');
+    });
+
+    it('should handle highlight spanning multiple list items with whitespace', () => {
+      // When list items have whitespace/newlines between them, highlighting works
+      const result = processHighlights({
+        content: '<ul>\n<li>First point here</li>\n<li>Second point here</li>\n</ul>',
+        highlights: [{ id: 1, selectedText: 'First point here Second point' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle highlight within single list item', () => {
+      const result = processHighlights({
+        content: '<ul><li>First point here with more text</li><li>Second point</li></ul>',
+        highlights: [{ id: 1, selectedText: 'First point here with' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle nested unordered lists', () => {
+      const result = processHighlights({
+        content: '<ul><li>Parent item<ul><li>Nested child item</li></ul></li></ul>',
+        highlights: [{ id: 1, selectedText: 'Nested child' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    // Ordered lists (ol/li)
+    it('should handle ordered list', () => {
+      const result = processHighlights({
+        content: '<ol><li>Step one</li><li>Step two</li><li>Step three</li></ol>',
+        highlights: [{ id: 1, selectedText: 'Step two' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+      expect(result).toContain('<ol>');
+    });
+
+    it('should handle highlight spanning ordered list items with whitespace', () => {
+      // When list items have whitespace between them, highlighting works
+      const result = processHighlights({
+        content: '<ol>\n<li>Do this first</li>\n<li>Then do this</li>\n</ol>',
+        highlights: [{ id: 1, selectedText: 'Do this first Then do' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    // List items with formatting
+    it('should handle list items with bold text', () => {
+      const result = processHighlights({
+        content: '<ul><li><strong>Important</strong> item here</li></ul>',
+        highlights: [{ id: 1, selectedText: 'Important item' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle list items with italic text', () => {
+      const result = processHighlights({
+        content: '<ul><li>This is <em>emphasized</em> text</li></ul>',
+        highlights: [{ id: 1, selectedText: 'is emphasized text' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle list items with links', () => {
+      const result = processHighlights({
+        content: '<ul><li>Check out <a href="https://example.com">this link</a> for more</li></ul>',
+        highlights: [{ id: 1, selectedText: 'this link for more' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    // Complex document structures
+    it('should handle mixed headings and lists', () => {
+      const result = processHighlights({
+        content: '<h2>Shopping List</h2><ul><li>Milk</li><li>Bread</li></ul><h2>Todo</h2><ol><li>Work</li></ol>',
+        highlights: [
+          { id: 1, selectedText: 'Shopping List' },
+          { id: 2, selectedText: 'Bread' },
+        ],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+      expect(result).toContain('data-highlight-id="2"');
+    });
+
+    it('should handle paragraph followed by list with whitespace', () => {
+      // When block elements have whitespace between them, highlighting works
+      const result = processHighlights({
+        content: '<p>Here are the steps:</p>\n<ol>\n<li>First step</li>\n<li>Second step</li>\n</ol>',
+        highlights: [{ id: 1, selectedText: 'the steps: First step' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle blockquote followed by list with whitespace', () => {
+      // When block elements have whitespace between them, highlighting works
+      const result = processHighlights({
+        content: '<blockquote>A wise saying</blockquote>\n<ul>\n<li>Point one</li>\n</ul>',
+        highlights: [{ id: 1, selectedText: 'wise saying Point one' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    // Code blocks within lists
+    it('should handle list items with inline code', () => {
+      const result = processHighlights({
+        content: '<ul><li>Use <code>console.log()</code> for debugging</li></ul>',
+        highlights: [{ id: 1, selectedText: 'console.log() for debugging' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    // Horizontal rules
+    it('should handle content with horizontal rules', () => {
+      const result = processHighlights({
+        content: '<p>Section one</p><hr><p>Section two</p>',
+        highlights: [{ id: 1, selectedText: 'Section one' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
     it('should handle blockquotes', () => {
       const result = processHighlights({
         content: '<blockquote>This is a famous quote from someone important.</blockquote>',

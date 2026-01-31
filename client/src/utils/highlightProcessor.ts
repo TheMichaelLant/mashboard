@@ -38,6 +38,45 @@ export function escapeRegex(text: string): string {
 }
 
 /**
+ * Block-level HTML tags that should have whitespace between them
+ */
+const BLOCK_TAGS = new Set([
+  'p', 'div', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+  'ul', 'ol', 'li', 'blockquote', 'pre', 'hr', 'br',
+  'table', 'tr', 'td', 'th', 'thead', 'tbody', 'tfoot',
+  'article', 'section', 'header', 'footer', 'nav', 'aside',
+  'figure', 'figcaption', 'main', 'address', 'dd', 'dl', 'dt',
+]);
+
+/**
+ * Adds whitespace between adjacent block elements in HTML
+ * This ensures text selections that span blocks (like h3 → p) can be matched
+ * since browsers include a space in selections at block boundaries
+ */
+export function addSpacesBetweenBlocks(html: string): string {
+  // Add space after closing block tags if followed by another tag without space
+  return html.replace(/<\/([\w]+)>(\s*)<([\w]+)/g, (match, closeTag, whitespace, openTag) => {
+    const closeIsBlock = BLOCK_TAGS.has(closeTag.toLowerCase());
+    const openIsBlock = BLOCK_TAGS.has(openTag.toLowerCase());
+
+    // If either tag is a block element and there's no whitespace, add a space
+    if ((closeIsBlock || openIsBlock) && !whitespace) {
+      return `</${closeTag}> <${openTag}`;
+    }
+    return match;
+  });
+}
+
+/**
+ * Strips HTML tags and adds whitespace between block elements
+ * This ensures text selections that span blocks (like h3 → p) can be matched
+ */
+export function stripHtmlWithSpaces(html: string): string {
+  // First add spaces between block elements, then strip all tags
+  return addSpacesBetweenBlocks(html).replace(/<[^>]*>/g, '');
+}
+
+/**
  * Checks if two strings overlap (share characters at edges or one contains the other)
  */
 export function findOverlap(str1: string, str2: string): boolean {
@@ -70,8 +109,8 @@ export function findAdjacent(
 ): 'before' | 'after' | null {
   if (!content) return null;
 
-  // Strip HTML tags for plain text comparison
-  const plainContent = content.replace(/<[^>]*>/g, '');
+  // Strip HTML tags for plain text comparison (with spaces between block elements)
+  const plainContent = stripHtmlWithSpaces(content);
 
   // Check if highlight comes immediately before selection (with optional whitespace)
   const beforePattern = new RegExp(
@@ -131,7 +170,7 @@ export function mergeTexts(
   const adjacency = findAdjacent(existing, newText, content);
   if (adjacency === 'before') {
     // existing comes before newText - find the combined text in content
-    const plainContent = content.replace(/<[^>]*>/g, '');
+    const plainContent = stripHtmlWithSpaces(content);
     const pattern = new RegExp(
       escapeRegex(existing) + '(\\s*)' + escapeRegex(newText)
     );
@@ -141,7 +180,7 @@ export function mergeTexts(
     }
   } else if (adjacency === 'after') {
     // existing comes after newText
-    const plainContent = content.replace(/<[^>]*>/g, '');
+    const plainContent = stripHtmlWithSpaces(content);
     const pattern = new RegExp(
       escapeRegex(newText) + '(\\s*)' + escapeRegex(existing)
     );
@@ -301,8 +340,10 @@ export function processHighlights({ content, highlights }: ProcessHighlightsOpti
 
     // Method 2: Try matching in plain text (handles text spanning HTML tags)
     try {
+      // Add spaces between block elements so position mapping aligns with browser selections
+      const htmlWithSpaces = addSpacesBetweenBlocks(result);
       // Strip HTML tags to get plain text for searching
-      const plainContent = result.replace(/<[^>]*>/g, '');
+      const plainContent = htmlWithSpaces.replace(/<[^>]*>/g, '');
 
       // Try exact match in plain text first
       let plainIndex = plainContent.indexOf(text);
@@ -319,16 +360,18 @@ export function processHighlights({ content, highlights }: ProcessHighlightsOpti
       }
 
       if (plainIndex !== -1) {
-        const { startHtmlIndex, endHtmlIndex } = mapPlainToHtmlPosition(result, plainIndex, matchLength);
+        // Use the HTML with spaces for position mapping so indices align
+        const { startHtmlIndex, endHtmlIndex } = mapPlainToHtmlPosition(htmlWithSpaces, plainIndex, matchLength);
 
         if (startHtmlIndex !== -1 && endHtmlIndex !== -1) {
-          const matchedText = result.slice(startHtmlIndex, endHtmlIndex);
+          const matchedText = htmlWithSpaces.slice(startHtmlIndex, endHtmlIndex);
           const matchedPlain = matchedText.replace(/<[^>]*>/g, '');
 
           // Verify the match by comparing normalized text
           if (normalizeWhitespace(matchedPlain) === normalizedText) {
             const replacement = wrapWithMark(matchedText, highlightId);
-            result = result.slice(0, startHtmlIndex) + replacement + result.slice(endHtmlIndex);
+            // Apply the replacement to htmlWithSpaces and update result with it
+            result = htmlWithSpaces.slice(0, startHtmlIndex) + replacement + htmlWithSpaces.slice(endHtmlIndex);
             highlightedTexts.push(normalizedText);
           }
         }
