@@ -3,17 +3,26 @@ import { createContext, useContext, useState, ReactNode } from 'react';
 interface HighlightDisplayContextType {
   showContext: boolean;
   toggleShowContext: () => void;
+  showHighlightsInContent: boolean;
+  toggleShowHighlightsInContent: () => void;
 }
 
 const HighlightDisplayContext = createContext<HighlightDisplayContextType | undefined>(undefined);
 
 export function HighlightDisplayProvider({ children }: { children: ReactNode }) {
   const [showContext, setShowContext] = useState(true);
+  const [showHighlightsInContent, setShowHighlightsInContent] = useState(true);
 
   const toggleShowContext = () => setShowContext((prev) => !prev);
+  const toggleShowHighlightsInContent = () => setShowHighlightsInContent((prev) => !prev);
 
   return (
-    <HighlightDisplayContext.Provider value={{ showContext, toggleShowContext }}>
+    <HighlightDisplayContext.Provider value={{
+      showContext,
+      toggleShowContext,
+      showHighlightsInContent,
+      toggleShowHighlightsInContent,
+    }}>
       {children}
     </HighlightDisplayContext.Provider>
   );
