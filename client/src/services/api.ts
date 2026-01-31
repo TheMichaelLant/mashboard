@@ -107,6 +107,11 @@ export const postApi = {
     fetchApi<{ summary: string }>(`/posts/${id}/summary`, {
       method: 'POST',
     }),
+
+  suggestHighlights: (id: number) =>
+    fetchApi<{ suggestions: Array<{ text: string; reason: string }> }>(`/posts/${id}/suggest-highlights`, {
+      method: 'POST',
+    }),
 };
 
 // Categories
@@ -225,6 +230,11 @@ export const highlightApi = {
 
   getPostHighlights: (postId: number) =>
     fetchApi<Highlight[]>(`/highlights/post/${postId}`),
+
+  summarize: (id: number) =>
+    fetchApi<{ summary: string; cached: boolean }>(`/highlights/${id}/summarize`, {
+      method: 'POST',
+    }),
 };
 
 // Subscriptions

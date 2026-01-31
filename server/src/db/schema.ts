@@ -94,6 +94,7 @@ export const highlights = sqliteTable('highlights', {
   startOffset: integer('start_offset').notNull(),
   endOffset: integer('end_offset').notNull(),
   note: text('note'), // Optional note about the highlight
+  summary: text('summary'), // AI-generated summary of the highlight
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
 });
 

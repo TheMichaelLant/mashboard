@@ -17,6 +17,9 @@ import {
   X,
   XCircle,
   Maximize2,
+  Sparkles,
+  Loader2,
+  Check,
 } from 'lucide-react';
 import {
   postApi,
@@ -150,6 +153,11 @@ export default function PostView() {
   const [hoveredHighlightId, setHoveredHighlightId] = useState<number | null>(null);
   const [deleteButtonPosition, setDeleteButtonPosition] = useState<{ x: number; y: number } | null>(null);
   const highlightMenuRef = useRef<HTMLDivElement>(null);
+
+  // AI Features state
+  const [suggestedHighlights, setSuggestedHighlights] = useState<Array<{ text: string; reason: string; applied?: boolean }>>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   // Calculate current content (moved early for use in callbacks)
   const currentContent =
@@ -920,6 +928,56 @@ export default function PostView() {
     navigator.clipboard.writeText(window.location.href);
   };
 
+  // AI: Get highlight suggestions for the post
+  const handleGetSuggestions = async () => {
+    if (!post || isLoadingSuggestions) return;
+
+    setIsLoadingSuggestions(true);
+    setShowSuggestions(true);
+    try {
+      const result = await postApi.suggestHighlights(post.id);
+      setSuggestedHighlights(result.suggestions.map(s => ({ ...s, applied: false })));
+    } catch (error) {
+      console.error('Failed to get suggestions:', error);
+      setSuggestedHighlights([]);
+    } finally {
+      setIsLoadingSuggestions(false);
+    }
+  };
+
+  // AI: Apply a suggested highlight
+  const handleApplySuggestion = async (suggestion: { text: string; reason: string }) => {
+    if (!post || !isSignedIn) return;
+
+    // Find the text in the content to get positions
+    const plainText = stripHtmlWithSpaces(currentContent);
+    const startOffset = plainText.indexOf(suggestion.text);
+    if (startOffset === -1) {
+      console.error('Could not find suggestion text in content');
+      return;
+    }
+    const endOffset = startOffset + suggestion.text.length;
+
+    try {
+      const newHighlight = await highlightApi.create({
+        postId: post.id,
+        chapterId: post.type === 'book' ? post.chapters?.[currentChapter]?.id : undefined,
+        selectedText: suggestion.text,
+        startOffset,
+        endOffset,
+      });
+      setHighlights((prev) => [...prev, newHighlight]);
+      // Mark as applied
+      setSuggestedHighlights((prev) =>
+        prev.map((s) =>
+          s.text === suggestion.text ? { ...s, applied: true } : s
+        )
+      );
+    } catch (error) {
+      console.error('Failed to apply suggestion:', error);
+    }
+  };
+
   // Process content to show highlights (must be called before any early returns)
   const processedContent = useMemo(() => {
     if (!currentContent || !showHighlightsInContent) {
@@ -1408,14 +1466,101 @@ export default function PostView() {
             </button>
           )}
         </div>
-        <button
-          onClick={handleShare}
-          className="flex items-center space-x-2 text-ink-400 hover:text-gold-500 transition-colors"
-        >
-          <Share2 size={24} />
-          <span>Share</span>
-        </button>
+        <div className="flex items-center space-x-4">
+          {isSignedIn && !post.isLocked && (
+            <button
+              onClick={handleGetSuggestions}
+              disabled={isLoadingSuggestions}
+              className="flex items-center space-x-2 text-ink-400 hover:text-gold-500 transition-colors disabled:opacity-50"
+            >
+              {isLoadingSuggestions ? (
+                <Loader2 size={20} className="animate-spin" />
+              ) : (
+                <Sparkles size={20} />
+              )}
+              <span>AI Suggest</span>
+            </button>
+          )}
+          <button
+            onClick={handleShare}
+            className="flex items-center space-x-2 text-ink-400 hover:text-gold-500 transition-colors"
+          >
+            <Share2 size={24} />
+            <span>Share</span>
+          </button>
+        </div>
       </div>
+
+      {/* AI Suggested Highlights Panel */}
+      {showSuggestions && (
+        <div className="mt-10 pt-6 border-t border-ink-700">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-heading font-semibold text-ink-100 flex items-center gap-2">
+              <Sparkles size={18} className="text-gold-500" />
+              AI Suggested Highlights
+            </h3>
+            <button
+              onClick={() => setShowSuggestions(false)}
+              className="text-ink-400 hover:text-ink-200"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {isLoadingSuggestions ? (
+            <div className="flex items-center justify-center py-8 text-ink-400">
+              <Loader2 size={24} className="animate-spin mr-2" />
+              <span>Analyzing content...</span>
+            </div>
+          ) : suggestedHighlights.length === 0 ? (
+            <p className="text-ink-400 text-center py-4">No suggestions found</p>
+          ) : (
+            <div className="space-y-3">
+              {suggestedHighlights.map((suggestion, index) => {
+                // Check if this suggestion overlaps with an existing highlight
+                const plainText = stripHtmlWithSpaces(currentContent);
+                const suggestionStart = plainText.indexOf(suggestion.text);
+                const suggestionEnd = suggestionStart + suggestion.text.length;
+                const isAlreadyHighlighted = suggestionStart !== -1 && highlights.some(h => {
+                  // Check for any overlap between suggestion and existing highlight
+                  return (
+                    (suggestionStart >= h.startOffset && suggestionStart < h.endOffset) ||
+                    (suggestionEnd > h.startOffset && suggestionEnd <= h.endOffset) ||
+                    (suggestionStart <= h.startOffset && suggestionEnd >= h.endOffset)
+                  );
+                });
+
+                return (
+                  <div
+                    key={index}
+                    className={`bg-ink-800/50 border rounded-lg p-4 ${
+                      suggestion.applied || isAlreadyHighlighted
+                        ? 'border-green-600/50 bg-green-900/20'
+                        : 'border-ink-600'
+                    }`}
+                  >
+                    <p className="text-ink-200 italic mb-2">"{suggestion.text}"</p>
+                    <p className="text-ink-400 text-sm mb-3">{suggestion.reason}</p>
+                    {suggestion.applied || isAlreadyHighlighted ? (
+                      <span className="inline-flex items-center text-green-400 text-sm">
+                        <Check size={14} className="mr-1" />
+                        {isAlreadyHighlighted ? 'Already highlighted' : 'Applied'}
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => handleApplySuggestion(suggestion)}
+                        className="btn btn-sm bg-gold-600 hover:bg-gold-500 text-ink-950"
+                      >
+                        <Highlighter size={14} className="mr-1" />
+                        Apply Highlight
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* User's Highlights */}
       {highlights.length > 0 && (

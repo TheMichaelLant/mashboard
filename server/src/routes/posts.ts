@@ -451,3 +451,115 @@ postsRouter.post('/:id/summary', optionalAuth, async (req: AuthRequest, res) => 
     res.status(500).json({ error: 'Failed to generate summary' });
   }
 });
+
+// Get AI-suggested highlights for a post
+postsRouter.post('/:id/suggest-highlights', optionalAuth, async (req: AuthRequest, res) => {
+  try {
+    const postId = parseInt(req.params.id);
+
+    const post = await db.query.posts.findFirst({
+      where: eq(posts.id, postId),
+      with: {
+        chapters: true,
+      },
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: 'Post not found' });
+    }
+
+    // Check access for paid content
+    if (post.isPaid && req.userId !== post.authorId) {
+      const subscription = await db.query.subscriptions.findFirst({
+        where: and(
+          eq(subscriptions.subscriberId, req.userId!),
+          eq(subscriptions.creatorId, post.authorId),
+          eq(subscriptions.status, 'active')
+        ),
+      });
+      if (!subscription) {
+        return res.status(403).json({ error: 'Subscribe to access this content' });
+      }
+    }
+
+    // Extract text content (strip HTML tags)
+    let textContent = '';
+    if (post.type === 'book' && post.chapters && post.chapters.length > 0) {
+      textContent = post.chapters
+        .map(ch => `${ch.title}\n${ch.content?.replace(/<[^>]*>/g, '') || ''}`)
+        .join('\n\n');
+    } else {
+      textContent = post.content?.replace(/<[^>]*>/g, '') || '';
+    }
+
+    if (!textContent.trim()) {
+      return res.status(400).json({ error: 'No content to analyze' });
+    }
+
+    // Truncate to avoid token limits
+    const maxChars = 30000;
+    if (textContent.length > maxChars) {
+      textContent = textContent.slice(0, maxChars) + '...';
+    }
+
+    const completion = await getOpenAI().chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a helpful assistant that identifies noteworthy passages in written content.
+Analyze the text and identify 3-5 passages worth highlighting.
+Look for: key insights, memorable quotes, surprising facts, main arguments, compelling phrases.
+
+IMPORTANT: Return ONLY exact text from the content - do not paraphrase or summarize.
+Return your response as a JSON array with this exact format:
+[{"text": "exact quote from the text", "reason": "brief explanation of why it's noteworthy"}]
+
+Keep each passage to 1-3 sentences. Make sure the text field contains an EXACT match from the content.`,
+        },
+        {
+          role: 'user',
+          content: `Please identify noteworthy passages from the following content:\n\n${textContent}`,
+        },
+      ],
+      max_tokens: 1000,
+      temperature: 0.3,
+      response_format: { type: 'json_object' },
+    });
+
+    const responseText = completion.choices[0]?.message?.content || '{"suggestions":[]}';
+    console.log('AI response:', responseText);
+
+    let suggestions: Array<{ text: string; reason: string }> = [];
+    try {
+      const parsed = JSON.parse(responseText);
+      console.log('Parsed response:', JSON.stringify(parsed, null, 2));
+
+      // Handle various response formats the AI might use
+      if (Array.isArray(parsed)) {
+        suggestions = parsed;
+      } else if (parsed.suggestions && Array.isArray(parsed.suggestions)) {
+        suggestions = parsed.suggestions;
+      } else if (parsed.highlights && Array.isArray(parsed.highlights)) {
+        suggestions = parsed.highlights;
+      } else if (parsed.passages && Array.isArray(parsed.passages)) {
+        suggestions = parsed.passages;
+      } else {
+        // Try to find any array property in the response
+        const arrayKey = Object.keys(parsed).find(key => Array.isArray(parsed[key]));
+        if (arrayKey) {
+          suggestions = parsed[arrayKey];
+        }
+      }
+      console.log('Extracted suggestions:', suggestions.length);
+    } catch (e) {
+      console.error('Failed to parse AI response:', responseText, e);
+      suggestions = [];
+    }
+
+    res.json({ suggestions });
+  } catch (error) {
+    console.error('Error generating highlight suggestions:', error);
+    res.status(500).json({ error: 'Failed to generate suggestions' });
+  }
+});

@@ -73,6 +73,7 @@ export interface Highlight {
   startOffset: number;
   endOffset: number;
   note?: string;
+  summary?: string;
   createdAt: Date;
   post?: Post;
   chapter?: Chapter;
