@@ -26,6 +26,11 @@ import {
 } from '../services/api';
 import type { Post, Highlight } from '../types';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
+import {
+  processHighlights,
+  findOverlapOrAdjacent,
+  mergeTexts,
+} from '../utils/highlightProcessor';
 
 export default function PostView() {
   const { id } = useParams<{ id: string }>();
@@ -50,6 +55,12 @@ export default function PostView() {
   const [highlightPosition, setHighlightPosition] = useState({ x: 0, y: 0 });
   const [showHighlightsInContent, setShowHighlightsInContent] = useState(true);
   const highlightMenuRef = useRef<HTMLDivElement>(null);
+
+  // Calculate current content (moved early for use in callbacks)
+  const currentContent =
+    post?.type === 'book' && post?.chapters?.length
+      ? post.chapters[currentChapter]?.content
+      : post?.content || '';
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -127,10 +138,11 @@ export default function PostView() {
   // Handle group hover for split highlights (marks with same data-highlight-id)
   useEffect(() => {
     const handleMarkHover = (e: Event) => {
-      const mark = e.target as HTMLElement;
-      if (!mark.classList.contains('highlight-mark')) return;
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.classList?.contains('highlight-mark')) return;
 
-      const highlightId = mark.dataset.highlightId;
+      const highlightId = target.dataset.highlightId;
       if (!highlightId) return;
 
       // Add hover class to all marks with the same highlight ID
@@ -139,10 +151,11 @@ export default function PostView() {
     };
 
     const handleMarkLeave = (e: Event) => {
-      const mark = e.target as HTMLElement;
-      if (!mark.classList.contains('highlight-mark')) return;
+      const target = e.target;
+      if (!(target instanceof HTMLElement)) return;
+      if (!target.classList?.contains('highlight-mark')) return;
 
-      const highlightId = mark.dataset.highlightId;
+      const highlightId = target.dataset.highlightId;
       if (!highlightId) return;
 
       // Remove hover class from all marks with the same highlight ID
@@ -241,50 +254,6 @@ export default function PostView() {
     }
   };
 
-  // Helper function to check if two strings overlap
-  const findOverlap = useCallback((str1: string, str2: string): boolean => {
-    // Check if one contains the other
-    if (str1.includes(str2) || str2.includes(str1)) return true;
-
-    // Check if str1's end overlaps with str2's beginning
-    for (let i = 1; i < str1.length; i++) {
-      if (str2.startsWith(str1.slice(i))) return true;
-    }
-
-    // Check if str2's end overlaps with str1's beginning
-    for (let i = 1; i < str2.length; i++) {
-      if (str1.startsWith(str2.slice(i))) return true;
-    }
-
-    return false;
-  }, []);
-
-  // Helper function to merge two overlapping text strings
-  const mergeOverlappingText = useCallback((existing: string, newText: string): string => {
-    // If one contains the other entirely, return the longer one
-    if (existing.includes(newText)) return existing;
-    if (newText.includes(existing)) return newText;
-
-    // Find overlap where existing ends and newText begins
-    for (let i = 1; i < existing.length; i++) {
-      const suffix = existing.slice(i);
-      if (newText.startsWith(suffix)) {
-        return existing + newText.slice(suffix.length);
-      }
-    }
-
-    // Find overlap where newText ends and existing begins
-    for (let i = 1; i < newText.length; i++) {
-      const suffix = newText.slice(i);
-      if (existing.startsWith(suffix)) {
-        return newText + existing.slice(suffix.length);
-      }
-    }
-
-    // No overlap found - return the new text (shouldn't happen)
-    return newText;
-  }, []);
-
   // Helper function to check if selected text is contained within an existing highlight
   // Returns the position: 'start', 'middle', 'end', or null if not contained
   const getContainmentPosition = useCallback((highlight: Highlight, selection: string): 'start' | 'middle' | 'end' | null => {
@@ -318,8 +287,8 @@ export default function PostView() {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
 
-      // Check if this text overlaps with ANY existing highlights (could be multiple)
-      const overlapping = highlights.filter((h) => findOverlap(h.selectedText, text));
+      // Check if this text overlaps OR is adjacent to ANY existing highlights
+      const overlapping = highlights.filter((h) => findOverlapOrAdjacent(h.selectedText, text, currentContent));
       setOverlappingHighlights(overlapping);
 
       setSelectedText({
@@ -333,16 +302,16 @@ export default function PostView() {
       });
       setShowHighlightMenu(true);
     }
-  }, [isSignedIn, post?.isLocked, isHighlightMode, highlights, findOverlap]);
+  }, [isSignedIn, post?.isLocked, isHighlightMode, highlights, currentContent]);
 
   const handleCreateHighlight = async () => {
     // Prevent double-click and validate
     if (!post || !selectedText || !isSignedIn || isCreatingHighlight) return;
 
-    // Check for exact duplicate or overlap - don't allow overlapping highlights
-    const hasOverlap = highlights.some((h) => findOverlap(h.selectedText, selectedText.text));
-    if (hasOverlap) {
-      // If there's an overlap, user should use "Extend" instead
+    // Check for overlap or adjacency - don't allow, user should use "Extend" instead
+    const hasOverlapOrAdjacent = highlights.some((h) => findOverlapOrAdjacent(h.selectedText, selectedText.text, currentContent));
+    if (hasOverlapOrAdjacent) {
+      // If there's an overlap or adjacency, user should use "Extend" instead
       setShowHighlightMenu(false);
       window.getSelection()?.removeAllRanges();
       return;
@@ -382,10 +351,10 @@ export default function PostView() {
   const handleExtendHighlight = async () => {
     if (!post || !selectedText || !isSignedIn || overlappingHighlights.length === 0 || isCreatingHighlight) return;
 
-    // Merge all overlapping highlights with the new selection
+    // Merge all overlapping/adjacent highlights with the new selection
     let mergedText = selectedText.text;
     for (const highlight of overlappingHighlights) {
-      mergedText = mergeOverlappingText(mergedText, highlight.selectedText);
+      mergedText = mergeTexts(mergedText, highlight.selectedText, currentContent);
     }
 
     // If only one highlight and merged text is same as existing, nothing to do
@@ -565,80 +534,16 @@ export default function PostView() {
     navigator.clipboard.writeText(window.location.href);
   };
 
-  // Calculate these values for useMemo (must be before early returns)
-  const currentContent =
-    post?.type === 'book' && post?.chapters?.length
-      ? post.chapters[currentChapter]?.content
-      : post?.content || '';
-
   // Process content to show highlights (must be called before any early returns)
   const processedContent = useMemo(() => {
-    if (!currentContent || !showHighlightsInContent || highlights.length === 0) {
+    if (!currentContent || !showHighlightsInContent) {
       return currentContent;
     }
 
-    let content = currentContent;
-
-    // Sort highlights by length (longest first) to avoid partial replacements
-    const sortedHighlights = [...highlights].sort(
-      (a, b) => b.selectedText.length - a.selectedText.length
-    );
-
-    // Create a set to track which text has been highlighted
-    const highlightedTexts = new Set<string>();
-
-    for (const highlight of sortedHighlights) {
-      const text = highlight.selectedText;
-      const highlightId = highlight.id;
-
-      // Skip if we've already highlighted this exact text
-      if (highlightedTexts.has(text)) continue;
-
-      // Try direct replacement first (works when no HTML tags in between and exact match)
-      if (content.includes(text)) {
-        const replacement = `<mark class="highlight-mark" data-highlight-id="${highlightId}">${text}</mark>`;
-        content = content.replace(text, replacement);
-        highlightedTexts.add(text);
-        continue;
-      }
-
-      // Text may span across HTML tags - try to find it by building a flexible pattern
-      try {
-        // Split into words, keeping punctuation separate
-        const tokens = text.match(/[\w]+|[^\w\s]+/g) || [];
-        if (tokens.length >= 1) {
-          // Build pattern that matches tokens with possible HTML tags between them
-          const tokenPatterns = tokens.map(token =>
-            token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          );
-          // Allow optional HTML tags and whitespace between any tokens (words or punctuation)
-          const pattern = tokenPatterns.join('(?:<[^>]*>|\\s)*');
-          const regex = new RegExp(`(${pattern})`, 'i');
-          const match = content.match(regex);
-          if (match) {
-            const matchedText = match[0];
-            // If match contains HTML tags, wrap only the text portions to avoid malformed HTML
-            if (matchedText.includes('<')) {
-              // Split by tags and wrap each text portion separately, all with same highlight ID
-              const replacement = matchedText.replace(
-                /([^<>]+)(?=<|$)/g,
-                (textPart) => textPart.trim() ? `<mark class="highlight-mark" data-highlight-id="${highlightId}">${textPart}</mark>` : textPart
-              );
-              content = content.replace(matchedText, replacement);
-            } else {
-              const replacement = `<mark class="highlight-mark" data-highlight-id="${highlightId}">${matchedText}</mark>`;
-              content = content.replace(matchedText, replacement);
-            }
-            highlightedTexts.add(text);
-          }
-        }
-      } catch (e) {
-        // If regex fails, skip this highlight
-        console.warn('Failed to create highlight regex for:', text);
-      }
-    }
-
-    return content;
+    return processHighlights({
+      content: currentContent,
+      highlights: highlights.map(h => ({ id: h.id, selectedText: h.selectedText })),
+    });
   }, [currentContent, highlights, showHighlightsInContent]);
 
   if (loading) {
