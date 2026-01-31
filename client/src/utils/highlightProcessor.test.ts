@@ -94,26 +94,26 @@ describe('mapPlainToHtmlPosition', () => {
 });
 
 describe('wrapWithMark', () => {
-  it('should wrap plain text with mark and position classes', () => {
+  it('should wrap plain text with mark and position attribute', () => {
     const result = wrapWithMark('hello', 1);
-    // Single text gets both first and last classes
-    expect(result).toBe('<mark class="highlight-mark highlight-first highlight-last" data-highlight-id="1">hello</mark>');
+    // Single text gets data-highlight-pos="only"
+    expect(result).toBe('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="only">hello</mark>');
   });
 
-  it('should wrap text containing HTML tags with position classes', () => {
+  it('should wrap text containing HTML tags with position attributes', () => {
     const result = wrapWithMark('hello <strong>world</strong>', 1);
-    // First text segment gets highlight-first
-    expect(result).toContain('<mark class="highlight-mark highlight-first" data-highlight-id="1">hello </mark>');
+    // First text segment gets data-highlight-pos="first"
+    expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="first">hello </mark>');
     expect(result).toContain('<strong>');
-    // Last text segment gets highlight-last
-    expect(result).toContain('<mark class="highlight-mark highlight-last" data-highlight-id="1">world</mark>');
+    // Last text segment gets data-highlight-pos="last"
+    expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="last">world</mark>');
     expect(result).toContain('</strong>');
   });
 
-  it('should preserve tags in original positions with position classes', () => {
+  it('should preserve tags in original positions with position attributes', () => {
     const result = wrapWithMark('a<br>b', 1);
-    // First segment gets highlight-first, last segment gets highlight-last
-    expect(result).toBe('<mark class="highlight-mark highlight-first" data-highlight-id="1">a</mark><br><mark class="highlight-mark highlight-last" data-highlight-id="1">b</mark>');
+    // First segment gets pos="first", last segment gets pos="last"
+    expect(result).toBe('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="first">a</mark><br><mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="last">b</mark>');
   });
 
   it('should not wrap whitespace-only parts', () => {
@@ -121,14 +121,14 @@ describe('wrapWithMark', () => {
     expect(result).toContain('<strong> </strong>');
   });
 
-  it('should handle three text segments with correct position classes', () => {
+  it('should handle three text segments with correct position attributes', () => {
     const result = wrapWithMark('first <em>middle</em> last', 1);
-    // First segment: highlight-first only
-    expect(result).toContain('<mark class="highlight-mark highlight-first" data-highlight-id="1">first </mark>');
-    // Middle segment: no position class
+    // First segment: data-highlight-pos="first"
+    expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="first">first </mark>');
+    // Middle segment: no position attribute
     expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1">middle</mark>');
-    // Last segment: highlight-last only
-    expect(result).toContain('<mark class="highlight-mark highlight-last" data-highlight-id="1"> last</mark>');
+    // Last segment: data-highlight-pos="last"
+    expect(result).toContain('<mark class="highlight-mark" data-highlight-id="1" data-highlight-pos="last"> last</mark>');
   });
 });
 

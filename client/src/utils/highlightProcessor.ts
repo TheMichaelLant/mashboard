@@ -199,7 +199,11 @@ export function mapPlainToHtmlPosition(
 
 /**
  * Wraps text that may contain HTML tags with mark elements
- * Adds position classes (highlight-first, highlight-last) for proper border-radius styling
+ * Adds data-highlight-pos attribute for proper border-radius styling:
+ * - "only": single segment (both first and last)
+ * - "first": first segment of multi-part highlight
+ * - "last": last segment of multi-part highlight
+ * - no attribute: middle segment (no border-radius)
  */
 export function wrapWithMark(text: string, highlightId: number): string {
   if (text.includes('<')) {
@@ -214,17 +218,17 @@ export function wrapWithMark(text: string, highlightId: number): string {
       }
     });
 
-    // If only one text part, treat it as both first and last
+    // If only one text part, it's the only segment
     if (textPartIndices.length === 1) {
       return parts.map((part, i) => {
         if (i === textPartIndices[0]) {
-          return `<mark class="highlight-mark highlight-first highlight-last" data-highlight-id="${highlightId}">${part}</mark>`;
+          return `<mark class="highlight-mark" data-highlight-id="${highlightId}" data-highlight-pos="only">${part}</mark>`;
         }
         return part;
       }).join('');
     }
 
-    // Multiple text parts - add position classes
+    // Multiple text parts - add position attributes
     const firstIdx = textPartIndices[0];
     const lastIdx = textPartIndices[textPartIndices.length - 1];
 
@@ -233,19 +237,19 @@ export function wrapWithMark(text: string, highlightId: number): string {
         return part; // Keep tags and whitespace-only parts as-is
       }
 
-      let classes = 'highlight-mark';
+      let posAttr = '';
       if (i === firstIdx) {
-        classes += ' highlight-first';
+        posAttr = ' data-highlight-pos="first"';
       } else if (i === lastIdx) {
-        classes += ' highlight-last';
+        posAttr = ' data-highlight-pos="last"';
       }
-      // Middle parts get no extra class (no border-radius)
+      // Middle parts get no position attribute (no border-radius)
 
-      return `<mark class="${classes}" data-highlight-id="${highlightId}">${part}</mark>`;
+      return `<mark class="highlight-mark" data-highlight-id="${highlightId}"${posAttr}>${part}</mark>`;
     }).join('');
   }
-  // Single text without HTML tags - it's both first and last
-  return `<mark class="highlight-mark highlight-first highlight-last" data-highlight-id="${highlightId}">${text}</mark>`;
+  // Single text without HTML tags - it's the only segment
+  return `<mark class="highlight-mark" data-highlight-id="${highlightId}" data-highlight-pos="only">${text}</mark>`;
 }
 
 /**
