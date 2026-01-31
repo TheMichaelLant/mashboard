@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { SignedIn } from '@clerk/clerk-react';
+import { SignedIn, useAuth } from '@clerk/clerk-react';
 import {
   PenTool,
   Highlighter,
@@ -18,11 +18,13 @@ import {
   Check,
   Eye,
   EyeOff,
+  Heart,
+  Bookmark,
 } from 'lucide-react';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
 import { useHighlightDisplay } from '../contexts/HighlightDisplayContext';
-import { postApi, highlightApi } from '../services/api';
-import type { Highlight } from '../types';
+import { postApi, highlightApi, appreciationApi, bookmarkApi } from '../services/api';
+import type { Highlight, Post } from '../types';
 
 // Tooltip wrapper component
 interface TooltipButtonProps {
@@ -43,9 +45,8 @@ function TooltipButton({ children, label, onClick, className = '', as = 'button'
 
   const tooltip = (
     <div
-      className={`absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-ink-800 border border-ink-700 rounded-lg text-sm text-ink-200 whitespace-nowrap shadow-lg transition-all duration-200 ${
-        isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2 pointer-events-none'
-      }`}
+      className={`absolute right-full mr-3 top-1/2 -translate-y-1/2 px-3 py-1.5 bg-ink-800 border border-ink-700 rounded-lg text-sm text-ink-200 whitespace-nowrap shadow-lg transition-all duration-200 ${isVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-2 pointer-events-none'
+        }`}
     >
       {label}
       {/* Arrow */}
@@ -88,6 +89,7 @@ function TooltipButton({ children, label, onClick, className = '', as = 'button'
 
 export default function FloatingToolbar() {
   const location = useLocation();
+  const { isSignedIn } = useAuth();
   const { isHighlightMode, toggleHighlightMode } = useHighlightMode();
   const { showContext, toggleShowContext, showHighlightsInContent, toggleShowHighlightsInContent } = useHighlightDisplay();
   const [showWriteMenu, setShowWriteMenu] = useState(false);
@@ -104,6 +106,7 @@ export default function FloatingToolbar() {
   const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
   const [appliedSuggestions, setAppliedSuggestions] = useState<Set<string>>(new Set());
   const [existingHighlights, setExistingHighlights] = useState<Highlight[]>([]);
+  const [post, setPost] = useState<Post | null>(null);
 
   // Refs for click-outside detection
   const writeMenuRef = useRef<HTMLDivElement>(null);
@@ -129,7 +132,27 @@ export default function FloatingToolbar() {
     setExistingHighlights([]);
     setShowAITools(false);
     setShowHighlightTools(false);
+    setPost(null);
   }, [postId]);
+
+  // Fetch post data for appreciation/bookmark status
+  useEffect(() => {
+    if (!postId || !isSignedIn) {
+      setPost(null);
+      return;
+    }
+
+    const fetchPost = async () => {
+      try {
+        const postData = await postApi.getById(postId);
+        setPost(postData);
+      } catch (error) {
+        console.error('Failed to fetch post:', error);
+      }
+    };
+
+    fetchPost();
+  }, [postId, isSignedIn]);
 
   // Close submenus when clicking outside
   useEffect(() => {
@@ -182,6 +205,46 @@ export default function FloatingToolbar() {
     // Also scroll window and document for other pages
     window.scrollTo({ top: 0, behavior: 'smooth' });
     document.documentElement.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handleAppreciate = async () => {
+    if (!post || !isSignedIn) return;
+    try {
+      if (post.isAppreciated) {
+        await appreciationApi.unappreciate(post.id);
+      } else {
+        await appreciationApi.appreciate(post.id);
+      }
+      setPost((prev) =>
+        prev
+          ? {
+            ...prev,
+            isAppreciated: !prev.isAppreciated,
+            appreciationCount: prev.isAppreciated
+              ? (prev.appreciationCount || 1) - 1
+              : (prev.appreciationCount || 0) + 1,
+          }
+          : null
+      );
+    } catch (error) {
+      console.error('Failed to toggle appreciation:', error);
+    }
+  };
+
+  const handleBookmark = async () => {
+    if (!post || !isSignedIn) return;
+    try {
+      if (post.isBookmarked) {
+        await bookmarkApi.unbookmark(post.id);
+      } else {
+        await bookmarkApi.bookmark(post.id);
+      }
+      setPost((prev) =>
+        prev ? { ...prev, isBookmarked: !prev.isBookmarked } : null
+      );
+    } catch (error) {
+      console.error('Failed to toggle bookmark:', error);
+    }
   };
 
   const handleSummary = async () => {
@@ -321,9 +384,9 @@ export default function FloatingToolbar() {
           <TooltipButton
             label="Create"
             onClick={() => setShowWriteMenu(!showWriteMenu)}
-            className="w-12 h-12 rounded-full bg-gold-600 text-ink-950 flex items-center justify-center shadow-lg hover:bg-gold-500 transition-all hover:scale-110"
+            className="w-12 h-12 rounded-full bg-green-600 text-ink-950 flex items-center justify-center shadow-lg hover:bg-green-500 transition-all"
           >
-            <PenTool size={20} />
+            <PenTool size={18} />
           </TooltipButton>
 
           {/* Write Menu Dropdown */}
@@ -377,18 +440,17 @@ export default function FloatingToolbar() {
             <TooltipButton
               label={showHighlightTools ? '' : 'Highlights'}
               onClick={() => setShowHighlightTools(!showHighlightTools)}
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
-                showHighlightTools || isHighlightMode
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${showHighlightTools || isHighlightMode
                   ? 'bg-gold-600 text-ink-950'
                   : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-gold-500 hover:border-gold-600'
-              }`}
+                }`}
             >
               <Highlighter size={18} />
             </TooltipButton>
 
             {/* Highlight Tools Submenu */}
             {showHighlightTools && (
-              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-ink-800 border border-ink-700 rounded-full px-2 py-1.5 shadow-xl">
+              <div className="absolute right-full mr-3 top-0 bg-ink-800 border border-ink-700 rounded-xl shadow-xl py-2 min-w-[180px]">
                 <button
                   onClick={() => {
                     if (showHighlightsInContent) {
@@ -396,84 +458,38 @@ export default function FloatingToolbar() {
                     }
                   }}
                   disabled={!showHighlightsInContent}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
+                  className={`w-full flex items-center gap-3 px-4 py-2.5 transition-colors ${
                     !showHighlightsInContent
                       ? 'text-ink-500 cursor-not-allowed'
-                      : isHighlightMode
-                        ? 'bg-gold-600 text-ink-950'
-                        : 'text-ink-200 hover:bg-ink-700 hover:text-gold-500'
+                      : 'text-ink-200 hover:bg-ink-700 hover:text-gold-500'
                   }`}
                 >
-                  <Highlighter size={16} />
-                  <span>{isHighlightMode ? 'Mode On' : 'Mode Off'}</span>
+                  <Highlighter size={18} className={isHighlightMode ? 'text-gold-500' : ''} />
+                  <div className="text-left">
+                    <div className="font-medium">Highlighter</div>
+                    <div className="text-xs text-ink-400">{isHighlightMode ? 'Mode is on' : 'Click to enable'}</div>
+                  </div>
                 </button>
-                <div className="w-px h-5 bg-ink-600" />
                 <button
                   onClick={() => {
-                    // If hiding highlights and mode is on, turn it off
                     if (showHighlightsInContent && isHighlightMode) {
                       toggleHighlightMode();
                     }
                     toggleShowHighlightsInContent();
                   }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm transition-colors ${
-                    showHighlightsInContent
-                      ? 'bg-gold-600 text-ink-950'
-                      : 'text-ink-200 hover:bg-ink-700 hover:text-gold-500'
-                  }`}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-ink-200 hover:bg-ink-700 hover:text-gold-500 transition-colors"
                 >
-                  {showHighlightsInContent ? <Eye size={16} /> : <EyeOff size={16} />}
-                  <span>{showHighlightsInContent ? 'Visible' : 'Hidden'}</span>
+                  {showHighlightsInContent ? <Eye size={18} className="text-gold-500" /> : <EyeOff size={18} />}
+                  <div className="text-left">
+                    <div className="font-medium">Visibility</div>
+                    <div className="text-xs text-ink-400">{showHighlightsInContent ? 'Showing in text' : 'Hidden in text'}</div>
+                  </div>
                 </button>
               </div>
             )}
           </div>
         </SignedIn>
       )}
-
-      {/* Share */}
-      <div className="relative">
-        <TooltipButton
-          label="Share"
-          onClick={handleShare}
-          className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-gold-500 hover:border-gold-600 transition-all hover:scale-110"
-        >
-          <Share2 size={18} />
-        </TooltipButton>
-        {showShareMenu && (
-          <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-ink-800 border border-gold-600 rounded-lg px-3 py-2 text-sm text-gold-500 whitespace-nowrap shadow-lg">
-            Link copied!
-          </div>
-        )}
-      </div>
-
-      {/* Divider */}
-      <div className="w-px h-4 bg-ink-700" />
-
-      {/* Navigation (only on feed) */}
-      {isFeedPage && (
-        <>
-          <TooltipButton
-            label="Previous post"
-            onClick={scrollToPrevious}
-            className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-ink-100 hover:border-ink-500 transition-all hover:scale-110"
-          >
-            <ChevronUp size={20} />
-          </TooltipButton>
-
-          <TooltipButton
-            label="Next post"
-            onClick={scrollToNext}
-            className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-ink-100 hover:border-ink-500 transition-all hover:scale-110"
-          >
-            <ChevronDown size={20} />
-          </TooltipButton>
-
-          <div className="w-px h-4 bg-ink-700" />
-        </>
-      )}
-
-      {/* AI Tools */}
       {postId && (
         <SignedIn>
           <div ref={aiToolsRef} className="relative">
@@ -486,38 +502,42 @@ export default function FloatingToolbar() {
                   setShowSuggestions(false);
                 }
               }}
-              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
-                showAITools || showSummary || showSuggestions
+              className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${showAITools || showSummary || showSuggestions
                   ? 'bg-purple-600 text-white border border-purple-500'
                   : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-purple-400 hover:border-purple-500'
-              }`}
+                }`}
             >
               <Sparkles size={18} />
             </TooltipButton>
 
             {/* AI Tools Submenu */}
             {showAITools && !showSummary && !showSuggestions && (
-              <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 flex items-center gap-2 bg-ink-800 border border-ink-700 rounded-full px-2 py-1.5 shadow-xl">
+              <div className="absolute right-full mr-3 top-0 bg-ink-800 border border-ink-700 rounded-xl shadow-xl py-2 min-w-[180px]">
                 <button
                   onClick={() => {
                     setShowAITools(false);
                     handleSuggestHighlights();
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm text-ink-200 hover:bg-ink-700 hover:text-gold-500 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-ink-200 hover:bg-ink-700 hover:text-gold-500 transition-colors"
                 >
-                  <Highlighter size={16} />
-                  <span>Suggest Highlights</span>
+                  <Highlighter size={18} />
+                  <div className="text-left">
+                    <div className="font-medium">Suggest Highlights</div>
+                    <div className="text-xs text-ink-400">Find noteworthy passages</div>
+                  </div>
                 </button>
-                <div className="w-px h-5 bg-ink-600" />
                 <button
                   onClick={() => {
                     setShowAITools(false);
                     handleSummary();
                   }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm text-ink-200 hover:bg-ink-700 hover:text-purple-400 transition-colors"
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-ink-200 hover:bg-ink-700 hover:text-purple-400 transition-colors"
                 >
-                  <Sparkles size={16} />
-                  <span>AI Summary</span>
+                  <Sparkles size={18} />
+                  <div className="text-left">
+                    <div className="font-medium">AI Summary</div>
+                    <div className="text-xs text-ink-400">Summarize this post</div>
+                  </div>
                 </button>
               </div>
             )}
@@ -594,9 +614,8 @@ export default function FloatingToolbar() {
                       });
                       const isHighlighted = isApplied || isAlreadyHighlighted;
                       return (
-                        <div key={index} className={`border rounded-lg p-3 ${
-                          isHighlighted ? 'border-green-600/50 bg-green-900/10' : 'border-ink-700'
-                        }`}>
+                        <div key={index} className={`border rounded-lg p-3 ${isHighlighted ? 'border-green-600/50 bg-green-900/10' : 'border-ink-700'
+                          }`}>
                           <p className="text-ink-200 text-sm leading-relaxed mb-2 line-clamp-3">
                             "{suggestion.text}"
                           </p>
@@ -604,11 +623,10 @@ export default function FloatingToolbar() {
                           <button
                             onClick={() => handleApplySuggestion(suggestion.text)}
                             disabled={isHighlighted}
-                            className={`text-xs flex items-center gap-1 transition-colors ${
-                              isHighlighted
+                            className={`text-xs flex items-center gap-1 transition-colors ${isHighlighted
                                 ? 'text-green-500 cursor-default'
                                 : 'text-gold-500 hover:text-gold-400'
-                            }`}
+                              }`}
                           >
                             {isHighlighted ? (
                               <>
@@ -633,17 +651,95 @@ export default function FloatingToolbar() {
         </SignedIn>
       )}
 
+
+      <div className="w-px h-4 bg-ink-700" />
+      {/* Appreciation (only on post pages) */}
+      {postId && post && (
+        <SignedIn>
+          <TooltipButton
+            label={post.isAppreciated ? 'Appreciated' : 'Appreciate'}
+            onClick={handleAppreciate}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${post.isAppreciated
+                ? 'bg-red-500 text-white border border-red-400'
+                : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-red-400 hover:border-red-500'
+              }`}
+          >
+            <Heart size={18} fill={post.isAppreciated ? 'currentColor' : 'none'} />
+          </TooltipButton>
+        </SignedIn>
+      )}
+
+      {/* Bookmark (only on post pages) */}
+      {postId && post && (
+        <SignedIn>
+          <TooltipButton
+            label={post.isBookmarked ? 'Saved' : 'Save'}
+            onClick={handleBookmark}
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${post.isBookmarked
+                ? 'bg-blue-600 text-ink-950'
+                : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-blue-500 hover:border-blue-600'
+              }`}
+          >
+            <Bookmark size={18} fill={post.isBookmarked ? 'currentColor' : 'none'} />
+          </TooltipButton>
+        </SignedIn>
+      )}
+
+      {/* Share */}
+      <div className="relative">
+        <TooltipButton
+          label="Share"
+          onClick={handleShare}
+          className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-gold-500 hover:border-gold-600 transition-all hover:scale-110"
+        >
+          <Share2 size={18} />
+        </TooltipButton>
+        {showShareMenu && (
+          <div className="absolute right-full mr-3 top-1/2 -translate-y-1/2 bg-ink-800 border border-gold-600 rounded-lg px-3 py-2 text-sm text-gold-500 whitespace-nowrap shadow-lg">
+            Link copied!
+          </div>
+        )}
+      </div>
+
+      {/* Divider */}
+      <div className="w-px h-4 bg-ink-700" />
+
+      {/* Navigation (only on feed) */}
+      {isFeedPage && (
+        <>
+          <TooltipButton
+            label="Previous post"
+            onClick={scrollToPrevious}
+            className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-ink-100 hover:border-ink-500 transition-all hover:scale-110"
+          >
+            <ChevronUp size={20} />
+          </TooltipButton>
+
+          <TooltipButton
+            label="Next post"
+            onClick={scrollToNext}
+            className="w-10 h-10 rounded-full bg-ink-800 border border-ink-700 text-ink-400 flex items-center justify-center hover:text-ink-100 hover:border-ink-500 transition-all hover:scale-110"
+          >
+            <ChevronDown size={20} />
+          </TooltipButton>
+
+          <div className="w-px h-4 bg-ink-700" />
+        </>
+      )}
+
+      {/* AI Tools */}
+
+
       {/* Highlight Context Toggle (only on library highlights tab) */}
       {isLibraryHighlightsTab && (
         <SignedIn>
           <TooltipButton
             label={showContext ? 'Hide Context' : 'Show Context'}
             onClick={toggleShowContext}
-            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${
-              showContext
+            className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${showContext
                 ? 'bg-gold-600 text-ink-950'
                 : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-gold-500 hover:border-gold-600'
-            }`}
+              }`}
           >
             <TextQuote size={18} />
           </TooltipButton>
