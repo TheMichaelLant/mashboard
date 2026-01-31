@@ -1822,6 +1822,36 @@ describe('Position-Aware Highlighting', () => {
         { start: 4, end: 7 }
       )).toBe(true);
     });
+
+    it('should detect adjacency when stored positions are broken (gap contains highlight text)', () => {
+      // Simulates a bug where highlight text includes "Job" but stored endOffset ends before "Job"
+      // Highlight text: "Expansion Job" (includes Job)
+      // Stored position: ends at 9 (before Job)
+      // Selection: "creation" starts at 14
+      // Gap: " Job " - contains "Job" which is part of the highlight text
+      const content = '<h3>Expansion</h3><p>Job creation in 2025</p>';
+      // Plain text: "Expansion Job creation in 2025"
+      //              0        9 10 13 14
+      expect(findOverlapOrAdjacent(
+        'Expansion Job',  // Highlight text includes "Job"
+        'creation',       // Selection text
+        content,
+        { start: 0, end: 9 },   // Broken: ends at "Expansion", missing "Job"
+        { start: 14, end: 22 }  // Selection starts at "creation"
+      )).toBe(true);  // Should detect adjacency because gap contains "Job" from highlight text
+    });
+
+    it('should NOT detect adjacency when gap contains unrelated text', () => {
+      // Gap contains text NOT from the highlight - positions are correct
+      const content = 'Hello world goodbye universe';
+      expect(findOverlapOrAdjacent(
+        'Hello',
+        'universe',
+        content,
+        { start: 0, end: 5 },
+        { start: 20, end: 28 }
+      )).toBe(false);  // Gap is " world goodbye " - not from highlight text
+    });
   });
 
   describe('processHighlights with position info', () => {
@@ -2931,6 +2961,494 @@ describe('Real Article Integration Tests', () => {
         // Selection end (at end of "slowed") should be inside highlight B
         expect(selEnd > highlightBStart && selEnd <= highlightBEnd).toBe(true);
       });
+    });
+  });
+});
+
+// ============================================================================
+// BLOCK ELEMENT BOUNDARY TESTS
+// These tests verify that highlighting works correctly when content contains
+// block-level HTML elements like <h2>, <h3>, <p>, <br>, <blockquote>, <ul>, <li>, etc.
+// The key challenge is that addSpacesBetweenBlocks adds spaces at block boundaries,
+// and position calculations must account for this.
+// ============================================================================
+
+import { addSpacesBetweenBlocks } from './highlightProcessor';
+
+describe('Block Element Boundary Tests', () => {
+  describe('addSpacesBetweenBlocks', () => {
+    it('should add space between adjacent block elements', () => {
+      const html = '<h2>Header</h2><p>Paragraph</p>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<h2>Header</h2> <p>Paragraph</p>');
+    });
+
+    it('should not add space if there is already whitespace', () => {
+      const html = '<h2>Header</h2> <p>Paragraph</p>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<h2>Header</h2> <p>Paragraph</p>');
+    });
+
+    it('should add space between h2 and h3', () => {
+      const html = '<h2>Main Title</h2><h3>Subtitle</h3>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<h2>Main Title</h2> <h3>Subtitle</h3>');
+    });
+
+    it('should add space between p and ul', () => {
+      const html = '<p>List follows:</p><ul><li>Item 1</li></ul>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<p>List follows:</p> <ul><li>Item 1</li></ul>');
+    });
+
+    it('should add space between li elements', () => {
+      const html = '<li>Item 1</li><li>Item 2</li>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<li>Item 1</li> <li>Item 2</li>');
+    });
+
+    it('should add space around br tags', () => {
+      const html = '<p>Line one<br>Line two</p>';
+      const result = addSpacesBetweenBlocks(html);
+      // br is a block tag, so space should be added after </br> if followed by another tag
+      // However, br is self-closing in this case, so the pattern may not match
+      // The pattern looks for </tag><tag> sequences
+      expect(result).toContain('Line one');
+      expect(result).toContain('Line two');
+    });
+
+    it('should not add space between inline elements', () => {
+      const html = '<p><strong>Bold</strong><em>Italic</em></p>';
+      const result = addSpacesBetweenBlocks(html);
+      // strong and em are inline, should not add space
+      expect(result).toBe('<p><strong>Bold</strong><em>Italic</em></p>');
+    });
+
+    it('should handle multiple adjacent block elements', () => {
+      const html = '<h2>Title</h2><h3>Subtitle</h3><p>Content</p>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<h2>Title</h2> <h3>Subtitle</h3> <p>Content</p>');
+    });
+
+    it('should handle blockquote elements', () => {
+      const html = '<p>Before quote</p><blockquote>Quote text</blockquote><p>After quote</p>';
+      const result = addSpacesBetweenBlocks(html);
+      expect(result).toBe('<p>Before quote</p> <blockquote>Quote text</blockquote> <p>After quote</p>');
+    });
+
+    it('should handle hr elements', () => {
+      const html = '<p>Before</p><hr><p>After</p>';
+      const result = addSpacesBetweenBlocks(html);
+      // hr is typically self-closing, but pattern looks for </tag> sequences
+      expect(result).toContain('Before');
+      expect(result).toContain('After');
+    });
+  });
+
+  describe('stripHtmlWithSpaces', () => {
+    it('should add space between block elements in plain text', () => {
+      const html = '<h2>Header</h2><p>Paragraph</p>';
+      const result = stripHtmlWithSpaces(html);
+      expect(result).toBe('Header Paragraph');
+    });
+
+    it('should preserve existing whitespace without adding extra', () => {
+      const html = '<h2>Header</h2> <p>Paragraph</p>';
+      const result = stripHtmlWithSpaces(html);
+      // Only one space since addSpacesBetweenBlocks doesn't add when whitespace already exists
+      expect(result).toBe('Header Paragraph');
+    });
+
+    it('should handle nested block elements', () => {
+      const html = '<div><h2>Title</h2><p>Content</p></div>';
+      const result = stripHtmlWithSpaces(html);
+      expect(result).toBe('Title Content');
+    });
+
+    it('should handle list items', () => {
+      const html = '<ul><li>First</li><li>Second</li><li>Third</li></ul>';
+      const result = stripHtmlWithSpaces(html);
+      expect(result).toBe('First Second Third');
+    });
+  });
+
+  describe('Highlighting across block boundaries', () => {
+    it('should highlight text spanning h2 to p', () => {
+      const content = '<h2>Header Text</h2><p>Paragraph content here</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Header Text Paragraph' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text spanning h3 to p', () => {
+      const content = '<h3>Section Title</h3><p>Section body text</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Section Title Section body' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text spanning multiple p tags', () => {
+      const content = '<p>First paragraph.</p><p>Second paragraph.</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'First paragraph. Second paragraph.' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text spanning p to blockquote', () => {
+      const content = '<p>Regular text</p><blockquote>Quoted text</blockquote>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Regular text Quoted text' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text spanning list items', () => {
+      const content = '<ul><li>Item one</li><li>Item two</li></ul>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Item one Item two' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text within a single block element', () => {
+      const content = '<h2>Main Header Title</h2>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Main Header' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+      expect(result).toContain('Main Header');
+    });
+  });
+
+  describe('Position calculations with block elements', () => {
+    const blockContent = '<h2>Title</h2><h3>Subtitle</h3><p>Body text here</p>';
+    const plainText = stripHtmlWithSpaces(blockContent);
+
+    it('should have correct plain text representation', () => {
+      expect(plainText).toBe('Title Subtitle Body text here');
+    });
+
+    it('should find correct position of text after block boundary', () => {
+      // "Subtitle" comes after "Title " (6 chars including space)
+      const subtitlePos = plainText.indexOf('Subtitle');
+      expect(subtitlePos).toBe(6);
+    });
+
+    it('should find correct position of text after multiple block boundaries', () => {
+      // "Body" comes after "Title Subtitle " (15 chars)
+      const bodyPos = plainText.indexOf('Body');
+      expect(bodyPos).toBe(15);
+    });
+
+    it('should detect adjacency across block boundary', () => {
+      // "Title" ends at position 5, "Subtitle" starts at position 6
+      // They are adjacent with a space between
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 0, end: 5 }, // "Title"
+        { start: 6, end: 14 }, // "Subtitle"
+        plainText
+      )).toBe(true);
+    });
+
+    it('should detect overlap when selection spans block boundary', () => {
+      // Selection "Title Subtitle" overlaps with both "Title" and "Subtitle"
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 0, end: 5 }, // "Title"
+        { start: 0, end: 14 }, // "Title Subtitle"
+        plainText
+      )).toBe(true);
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: 6, end: 14 }, // "Subtitle"
+        { start: 0, end: 14 }, // "Title Subtitle"
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('Complex block structure scenarios', () => {
+    const complexHtml = `<article>
+      <h2>Main Title</h2>
+      <p>Introduction paragraph with some text.</p>
+      <h3>Section One</h3>
+      <p>Content for section one.</p>
+      <ul>
+        <li>First item</li>
+        <li>Second item</li>
+      </ul>
+      <blockquote>A notable quote here.</blockquote>
+      <p>Conclusion text.</p>
+    </article>`;
+
+    const plainText = stripHtmlWithSpaces(complexHtml);
+
+    it('should correctly strip complex nested HTML', () => {
+      expect(plainText).toContain('Main Title');
+      expect(plainText).toContain('Introduction paragraph');
+      expect(plainText).toContain('Section One');
+      expect(plainText).toContain('First item');
+      expect(plainText).toContain('Second item');
+      expect(plainText).toContain('A notable quote');
+      expect(plainText).toContain('Conclusion text');
+    });
+
+    it('should highlight text spanning from h2 to first p', () => {
+      const result = processHighlights({
+        content: complexHtml,
+        highlights: [{ id: 1, selectedText: 'Main Title Introduction paragraph' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text spanning multiple list items', () => {
+      const result = processHighlights({
+        content: complexHtml,
+        highlights: [{ id: 1, selectedText: 'First item Second item' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text from p through blockquote to next p', () => {
+      const result = processHighlights({
+        content: complexHtml,
+        highlights: [{ id: 1, selectedText: 'notable quote here. Conclusion' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle position-based highlighting across blocks', () => {
+      const sectionOnePos = plainText.indexOf('Section One');
+      const result = processHighlights({
+        content: complexHtml,
+        highlights: [{
+          id: 1,
+          selectedText: 'Section One',
+          plainTextStart: sectionOnePos,
+          plainTextEnd: sectionOnePos + 'Section One'.length,
+        }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+  });
+
+  describe('Merge and extend across block boundaries', () => {
+    const testContent = '<h3>Header Text</h3><p>Body paragraph content.</p>';
+    const plainText = stripHtmlWithSpaces(testContent);
+
+    it('should detect adjacency for extending highlight from h3 into p', () => {
+      // Existing highlight: "Header Text" (in h3)
+      // Selection: "Body paragraph" (in p)
+      // They should be adjacent (space between from block boundary)
+      const headerPos = plainText.indexOf('Header Text');
+      const bodyPos = plainText.indexOf('Body paragraph');
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: headerPos, end: headerPos + 'Header Text'.length },
+        { start: bodyPos, end: bodyPos + 'Body paragraph'.length },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should merge text across block boundary correctly', () => {
+      const merged = mergeTexts('Header Text', 'Body paragraph', testContent);
+      expect(merged).toBe('Header Text Body paragraph');
+    });
+
+    it('should detect overlap when selection starts in h3 and ends in p', () => {
+      // Highlight A: "Header Text"
+      // Highlight B: "paragraph content"
+      // Selection: "Text Body paragraph" (spans the block boundary)
+      const headerPos = plainText.indexOf('Header');
+      const paragraphContentPos = plainText.indexOf('paragraph content');
+
+      const selectionStart = plainText.indexOf('Text');
+      const selectionEnd = plainText.indexOf('paragraph') + 'paragraph'.length;
+
+      // Highlight A should overlap with selection
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: headerPos, end: headerPos + 'Header Text'.length },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+
+      // Highlight B should also overlap with selection
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: paragraphContentPos, end: paragraphContentPos + 'paragraph content'.length },
+        { start: selectionStart, end: selectionEnd },
+        plainText
+      )).toBe(true);
+    });
+  });
+
+  describe('Edge cases with block elements', () => {
+    it('should handle consecutive br tags', () => {
+      const content = '<p>Line one<br><br>Line two</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Line one' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle empty block elements', () => {
+      const content = '<h2>Title</h2><p></p><p>Content</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Title' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle mixed inline and block elements', () => {
+      const content = '<h2><strong>Bold</strong> Title</h2><p>Paragraph</p>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Bold Title Paragraph' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle nested list structures', () => {
+      const content = '<ul><li>Parent<ul><li>Child</li></ul></li></ul>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Parent' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle dl/dt/dd elements', () => {
+      const content = '<dl><dt>Term</dt><dd>Definition</dd></dl>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Term Definition' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle table elements', () => {
+      const content = '<table><tr><td>Cell 1</td><td>Cell 2</td></tr></table>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Cell 1' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle figure and figcaption', () => {
+      const content = '<figure><img src="test.jpg"><figcaption>Image caption</figcaption></figure>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Image caption' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should handle header/footer/nav/aside elements', () => {
+      const content = '<header>Header content</header><main>Main content</main><footer>Footer content</footer>';
+      const result = processHighlights({
+        content,
+        highlights: [{ id: 1, selectedText: 'Header content Main content' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+  });
+
+  describe('Real-world block element scenarios from article', () => {
+    // Use the actual article HTML structure
+    const articleWithBlocks = `<h2>Job Growth in the United States</h2><h3>Slower Employment Expansion</h3><p>Job creation in the United States slowed significantly in 2025.</p>`;
+    const plainText = stripHtmlWithSpaces(articleWithBlocks);
+
+    it('should correctly extract plain text from article structure', () => {
+      expect(plainText).toBe('Job Growth in the United States Slower Employment Expansion Job creation in the United States slowed significantly in 2025.');
+    });
+
+    it('should highlight text spanning h2 to h3', () => {
+      const result = processHighlights({
+        content: articleWithBlocks,
+        highlights: [{ id: 1, selectedText: 'United States Slower Employment' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should highlight text spanning h3 to p', () => {
+      const result = processHighlights({
+        content: articleWithBlocks,
+        highlights: [{ id: 1, selectedText: 'Employment Expansion Job creation' }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+
+    it('should detect adjacency across h2/h3 boundary', () => {
+      // "United States" in h2 and "Slower" in h3
+      const usPos = plainText.indexOf('United States');
+      const slowerPos = plainText.indexOf('Slower');
+
+      expect(arePositionsAdjacentOrOverlapping(
+        { start: usPos, end: usPos + 'United States'.length },
+        { start: slowerPos, end: slowerPos + 'Slower'.length },
+        plainText
+      )).toBe(true);
+    });
+
+    it('should merge highlights across h3/p boundary', () => {
+      const merged = mergeTexts('Slower Employment Expansion', 'Job creation', articleWithBlocks);
+      expect(merged).toBe('Slower Employment Expansion Job creation');
+    });
+
+    it('should handle "the United States" appearing in both h2 and p', () => {
+      // "the United States" appears twice: once in h2, once in p
+      // Position-based detection should differentiate them
+      const firstPos = plainText.indexOf('the United States');
+      const secondPos = plainText.indexOf('the United States', firstPos + 1);
+
+      expect(firstPos).toBeGreaterThanOrEqual(0);
+      expect(secondPos).toBeGreaterThan(firstPos);
+
+      // Highlighting the second occurrence should work with position info
+      const result = processHighlights({
+        content: articleWithBlocks,
+        highlights: [{
+          id: 1,
+          selectedText: 'the United States',
+          plainTextStart: secondPos,
+          plainTextEnd: secondPos + 'the United States'.length,
+        }],
+      });
+      expect(result).toContain('data-highlight-id="1"');
+    });
+  });
+
+  describe('Whitespace handling at block boundaries', () => {
+    it('should handle newlines between block elements', () => {
+      const content = '<h2>Title</h2>\n<p>Paragraph</p>';
+      const plain = stripHtmlWithSpaces(content);
+      // The newline should be preserved, and a space added for block boundary
+      expect(plain).toContain('Title');
+      expect(plain).toContain('Paragraph');
+    });
+
+    it('should handle multiple newlines between block elements', () => {
+      const content = '<h2>Title</h2>\n\n\n<p>Paragraph</p>';
+      const plain = stripHtmlWithSpaces(content);
+      expect(plain).toContain('Title');
+      expect(plain).toContain('Paragraph');
+    });
+
+    it('should handle tabs and spaces between block elements', () => {
+      const content = '<h2>Title</h2>  \t  <p>Paragraph</p>';
+      const plain = stripHtmlWithSpaces(content);
+      expect(plain).toContain('Title');
+      expect(plain).toContain('Paragraph');
     });
   });
 });

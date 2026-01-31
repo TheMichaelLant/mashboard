@@ -465,13 +465,17 @@ export default function PostView() {
       // Get the original plain text (same as what highlights were stored against)
       const originalPlainText = stripHtmlWithSpaces(currentContent);
 
+      // Normalize selected text: replace newlines with spaces to match stripHtmlWithSpaces behavior
+      // Browser selections across block elements contain newlines, but our plain text uses spaces
+      const normalizedText = text.replace(/\n+/g, ' ');
+
       // Find the selection text in the original content
       // Use the DOM position as a hint to find the closest occurrence
       let plainTextPosition: SelectionPosition | null = null;
       const textOccurrences: number[] = [];
       let searchStart = 0;
       while (true) {
-        const idx = originalPlainText.indexOf(text, searchStart);
+        const idx = originalPlainText.indexOf(normalizedText, searchStart);
         if (idx === -1) break;
         textOccurrences.push(idx);
         searchStart = idx + 1;
@@ -479,7 +483,7 @@ export default function PostView() {
 
       if (textOccurrences.length === 1) {
         // Only one occurrence, use it directly
-        plainTextPosition = { start: textOccurrences[0], end: textOccurrences[0] + text.length };
+        plainTextPosition = { start: textOccurrences[0], end: textOccurrences[0] + normalizedText.length };
       } else if (textOccurrences.length > 1 && domPosition) {
         // Multiple occurrences - find the one closest to the DOM position
         const closest = textOccurrences.reduce((prev, curr) => {
@@ -487,17 +491,16 @@ export default function PostView() {
           const currDiff = Math.abs(curr - domPosition.start);
           return currDiff < prevDiff ? curr : prev;
         });
-        plainTextPosition = { start: closest, end: closest + text.length };
+        plainTextPosition = { start: closest, end: closest + normalizedText.length };
       } else if (textOccurrences.length > 1) {
         // Multiple occurrences, no DOM hint - use first occurrence
-        plainTextPosition = { start: textOccurrences[0], end: textOccurrences[0] + text.length };
+        plainTextPosition = { start: textOccurrences[0], end: textOccurrences[0] + normalizedText.length };
       }
 
       // Check if this text overlaps OR is adjacent to ANY existing highlights
       // Use position-aware detection when we have position info for the selection
       const selectionPos = plainTextPosition || undefined;
       const overlapping = highlights.filter((h) => {
-        // If we have position info for both the highlight and selection, use it
         const highlightPos = h.startOffset !== undefined && h.endOffset !== undefined
           ? { start: h.startOffset, end: h.endOffset } as SelectionPosition
           : undefined;
@@ -577,13 +580,16 @@ export default function PostView() {
     if (!post || !selectedText || !isSignedIn || overlappingHighlights.length === 0 || isCreatingHighlight) return;
 
     // Merge all overlapping/adjacent highlights with the new selection
-    let mergedText = selectedText.text;
+    // Normalize selection text: replace newlines with spaces to match content format
+    let mergedText = selectedText.text.replace(/\n+/g, ' ');
     for (const highlight of overlappingHighlights) {
-      mergedText = mergeTexts(mergedText, highlight.selectedText, currentContent);
+      const normalizedHighlight = highlight.selectedText.replace(/\n+/g, ' ');
+      mergedText = mergeTexts(mergedText, normalizedHighlight, currentContent);
     }
 
-    // If only one highlight and merged text is same as existing, nothing to do
-    if (overlappingHighlights.length === 1 && mergedText === overlappingHighlights[0].selectedText) {
+    // If only one highlight and merged text is same as existing (normalized), nothing to do
+    const normalizedExisting = overlappingHighlights[0].selectedText.replace(/\n+/g, ' ');
+    if (overlappingHighlights.length === 1 && mergedText === normalizedExisting) {
       setShowHighlightMenu(false);
       window.getSelection()?.removeAllRanges();
       return;
@@ -711,12 +717,44 @@ export default function PostView() {
 
     setIsCreatingHighlight(true);
     try {
-      const fullText = existingHighlight.selectedText;
-      const selectionIndex = fullText.indexOf(selectedText.text);
+      // Use position-based splitting when we have position info
+      // This is more reliable than text-based indexOf when whitespace differs
+      const selStart = selectedText.plainTextStart;
+      const selEnd = selectedText.plainTextEnd;
+      const hlStart = existingHighlight.startOffset;
+      const hlEnd = existingHighlight.endOffset;
 
-      // Get the two parts: before and after the selection
-      const textBefore = fullText.slice(0, selectionIndex);
-      const textAfter = fullText.slice(selectionIndex + selectedText.text.length);
+      // Get the plain text to extract the before/after portions
+      const plainText = stripHtmlWithSpaces(currentContent);
+
+      let textBefore: string;
+      let textAfter: string;
+      let beforeEnd: number;
+      let afterStart: number;
+
+      if (selStart !== undefined && selEnd !== undefined &&
+          hlStart !== undefined && hlEnd !== undefined) {
+        // Position-based split: use positions directly
+        textBefore = plainText.slice(hlStart, selStart);
+        textAfter = plainText.slice(selEnd, hlEnd);
+        beforeEnd = selStart;
+        afterStart = selEnd;
+      } else {
+        // Fallback to text-based split (normalize whitespace first)
+        const fullText = existingHighlight.selectedText.replace(/\n+/g, ' ');
+        const normalizedSelection = selectedText.text.replace(/\n+/g, ' ');
+        const selectionIndex = fullText.indexOf(normalizedSelection);
+
+        if (selectionIndex === -1) {
+          console.error('Could not find selection in highlight text');
+          return;
+        }
+
+        textBefore = fullText.slice(0, selectionIndex);
+        textAfter = fullText.slice(selectionIndex + normalizedSelection.length);
+        beforeEnd = (existingHighlight.startOffset ?? 0) + selectionIndex;
+        afterStart = beforeEnd + normalizedSelection.length;
+      }
 
       // Delete the old highlight
       await highlightApi.delete(existingHighlight.id);
@@ -729,8 +767,8 @@ export default function PostView() {
           postId: post.id,
           chapterId: post.type === 'book' ? post.chapters?.[currentChapter]?.id : undefined,
           selectedText: textBefore,
-          startOffset: existingHighlight.startOffset,
-          endOffset: existingHighlight.startOffset + textBefore.length,
+          startOffset: hlStart,
+          endOffset: beforeEnd,
         });
         newHighlights.push(highlight1);
       }
@@ -741,8 +779,8 @@ export default function PostView() {
           postId: post.id,
           chapterId: post.type === 'book' ? post.chapters?.[currentChapter]?.id : undefined,
           selectedText: textAfter,
-          startOffset: existingHighlight.startOffset + selectionIndex + selectedText.text.length,
-          endOffset: existingHighlight.endOffset,
+          startOffset: afterStart,
+          endOffset: hlEnd,
         });
         newHighlights.push(highlight2);
       }

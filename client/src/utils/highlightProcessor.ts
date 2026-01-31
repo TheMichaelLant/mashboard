@@ -339,7 +339,8 @@ export function arePositionsAdjacentOrOverlapping(
 /**
  * Checks if two strings either overlap or are adjacent in the content
  * Uses position-based detection when position info is available.
- * Falls back to text-based detection when positions aren't available.
+ * Falls back to text-based detection when positions aren't available OR when
+ * position-based detection fails AND the gap suggests broken positions.
  */
 export function findOverlapOrAdjacent(
   highlightText: string,
@@ -348,15 +349,39 @@ export function findOverlapOrAdjacent(
   highlightPosition?: SelectionPosition,
   selectionPosition?: SelectionPosition
 ): boolean {
-  // Use position-based detection when we have BOTH positions
+  const plainContent = stripHtmlWithSpaces(content);
+
+  // Try position-based detection when we have BOTH positions
   if (highlightPosition && selectionPosition) {
-    const plainContent = stripHtmlWithSpaces(content);
-    return arePositionsAdjacentOrOverlapping(highlightPosition, selectionPosition, plainContent);
+    if (arePositionsAdjacentOrOverlapping(highlightPosition, selectionPosition, plainContent)) {
+      return true;
+    }
+
+    // Position-based detection failed - check if the gap contains part of the highlight text
+    // This indicates the stored positions are incorrect (e.g., highlight ends before its actual text ends)
+    // Only then fall through to text-based detection
+    const gapStart = Math.min(highlightPosition.end, selectionPosition.start);
+    const gapEnd = Math.max(highlightPosition.end, selectionPosition.start);
+    if (gapEnd > gapStart) {
+      const gap = plainContent.slice(gapStart, gapEnd);
+      // Check if the gap contains text that is part of the highlight's stored text
+      // This indicates broken position data - the highlight text extends beyond its stored endOffset
+      const normalizedGap = gap.trim();
+      if (normalizedGap.length > 0) {
+        // Normalize both for comparison (handle newlines vs spaces at block boundaries)
+        const normalizedHighlight = highlightText.replace(/\s+/g, ' ');
+        if (normalizedHighlight.includes(normalizedGap) || normalizedGap.split(/\s+/).some(word => normalizedHighlight.includes(word))) {
+          // Gap contains text from the highlight - positions are broken, use text-based fallback
+          // Fall through to text-based detection below
+        } else {
+          // Gap contains text NOT from the highlight - positions are correct, they're truly not adjacent
+          return false;
+        }
+      }
+    }
   }
 
-  // Fall back to text-based detection when positions aren't available
-  // This handles edge cases where position calculation fails
-
+  // Text-based detection as primary method (when no positions) or fallback (when positions indicate broken data)
   // First check adjacency (content-aware)
   if (findAdjacent(highlightText, selectedText, content) !== null) {
     return true;
