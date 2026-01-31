@@ -35,6 +35,9 @@ import {
   stripHtmlWithSpaces,
 } from '../utils/highlightProcessor';
 
+// Debug logging only in development
+const DEBUG_HIGHLIGHTS = import.meta.env.DEV;
+
 /**
  * Block-level tags that should have spaces between them (matching highlightProcessor)
  */
@@ -451,10 +454,21 @@ export default function PostView() {
     const text = selection.toString().trim();
     if (text.length > 0 && articleRef.current) {
       const range = selection.getRangeAt(0);
-      const rect = range.getBoundingClientRect();
 
       // Get the prose container (the actual content container, not the article wrapper)
       const proseContainer = articleRef.current.querySelector('.prose') || articleRef.current;
+
+      // Only allow selections that are at least partially within the post content area
+      // If selection is entirely outside the post, ignore it
+      const startInPost = proseContainer.contains(range.startContainer);
+      const endInPost = proseContainer.contains(range.endContainer);
+      if (!startInPost && !endInPost) {
+        setShowHighlightMenu(false);
+        setOverlappingHighlights([]);
+        return;
+      }
+
+      const rect = range.getBoundingClientRect();
 
       // Calculate plain text position of the selection
       // IMPORTANT: We need positions based on the ORIGINAL content (before processHighlights adds spaces)
@@ -500,11 +514,35 @@ export default function PostView() {
       // Check if this text overlaps OR is adjacent to ANY existing highlights
       // Use position-aware detection when we have position info for the selection
       const selectionPos = plainTextPosition || undefined;
+
+      if (DEBUG_HIGHLIGHTS) {
+        console.log('=== Selection Debug ===');
+        console.log('Selected text:', JSON.stringify(text));
+        console.log('Selection position:', selectionPos);
+      }
+
       const overlapping = highlights.filter((h) => {
         const highlightPos = h.startOffset !== undefined && h.endOffset !== undefined
           ? { start: h.startOffset, end: h.endOffset } as SelectionPosition
           : undefined;
-        return findOverlapOrAdjacent(h.selectedText, text, currentContent, highlightPos, selectionPos);
+
+        if (DEBUG_HIGHLIGHTS) {
+          console.log('Checking highlight:', h.id, JSON.stringify(h.selectedText?.substring(0, 30)));
+          console.log('  Highlight pos:', highlightPos);
+          if (highlightPos && selectionPos) {
+            const gap = originalPlainText.slice(
+              Math.min(highlightPos.end, selectionPos.start),
+              Math.max(highlightPos.end, selectionPos.start)
+            );
+            console.log('  Gap:', JSON.stringify(gap));
+          }
+        }
+
+        const result = findOverlapOrAdjacent(h.selectedText, text, currentContent, highlightPos, selectionPos);
+        if (DEBUG_HIGHLIGHTS) {
+          console.log('  Result:', result);
+        }
+        return result;
       });
       setOverlappingHighlights(overlapping);
 
@@ -582,14 +620,29 @@ export default function PostView() {
     // Merge all overlapping/adjacent highlights with the new selection
     // Normalize selection text: replace newlines with spaces to match content format
     let mergedText = selectedText.text.replace(/\n+/g, ' ');
+
+    if (DEBUG_HIGHLIGHTS) {
+      console.log('=== Extend Debug ===');
+      console.log('Initial mergedText:', JSON.stringify(mergedText));
+    }
+
     for (const highlight of overlappingHighlights) {
       const normalizedHighlight = highlight.selectedText.replace(/\n+/g, ' ');
+      if (DEBUG_HIGHLIGHTS) {
+        console.log('Merging with highlight:', JSON.stringify(normalizedHighlight.substring(0, 50)));
+      }
       mergedText = mergeTexts(mergedText, normalizedHighlight, currentContent);
+      if (DEBUG_HIGHLIGHTS) {
+        console.log('After merge:', JSON.stringify(mergedText.substring(0, 80)));
+      }
     }
 
     // If only one highlight and merged text is same as existing (normalized), nothing to do
     const normalizedExisting = overlappingHighlights[0].selectedText.replace(/\n+/g, ' ');
     if (overlappingHighlights.length === 1 && mergedText === normalizedExisting) {
+      if (DEBUG_HIGHLIGHTS) {
+        console.log('Merged text same as existing, skipping');
+      }
       setShowHighlightMenu(false);
       window.getSelection()?.removeAllRanges();
       return;
@@ -724,6 +777,12 @@ export default function PostView() {
       const hlStart = existingHighlight.startOffset;
       const hlEnd = existingHighlight.endOffset;
 
+      if (DEBUG_HIGHLIGHTS) {
+        console.log('=== Split Debug ===');
+        console.log('Highlight positions:', hlStart, '-', hlEnd);
+        console.log('Selection positions:', selStart, '-', selEnd);
+      }
+
       // Get the plain text to extract the before/after portions
       const plainText = stripHtmlWithSpaces(currentContent);
 
@@ -739,11 +798,23 @@ export default function PostView() {
         textAfter = plainText.slice(selEnd, hlEnd);
         beforeEnd = selStart;
         afterStart = selEnd;
+        if (DEBUG_HIGHLIGHTS) {
+          console.log('Using position-based split');
+          console.log('Text before:', JSON.stringify(textBefore.substring(0, 50)));
+          console.log('Text after:', JSON.stringify(textAfter.substring(0, 50)));
+        }
       } else {
         // Fallback to text-based split (normalize whitespace first)
         const fullText = existingHighlight.selectedText.replace(/\n+/g, ' ');
         const normalizedSelection = selectedText.text.replace(/\n+/g, ' ');
         const selectionIndex = fullText.indexOf(normalizedSelection);
+
+        if (DEBUG_HIGHLIGHTS) {
+          console.log('Using text-based split');
+          console.log('Full text:', JSON.stringify(fullText.substring(0, 50)));
+          console.log('Selection:', JSON.stringify(normalizedSelection.substring(0, 50)));
+          console.log('Selection index:', selectionIndex);
+        }
 
         if (selectionIndex === -1) {
           console.error('Could not find selection in highlight text');
