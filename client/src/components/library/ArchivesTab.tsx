@@ -1,5 +1,6 @@
 import { Archive, Trash2 } from 'lucide-react';
 import PostCard from '../PostCard';
+import { IconButton } from '../ui';
 import LibraryEmptyState from './LibraryEmptyState';
 import LibraryLoadingSkeleton from './LibraryLoadingSkeleton';
 import { useArchives } from '../../hooks/useArchives';
@@ -31,13 +32,14 @@ export default function ArchivesTab() {
             onAppreciate={toggleAppreciation}
             onBookmark={() => removeArchive(book.id)}
           />
-          <button
+          <IconButton
+            icon={Trash2}
+            variant="danger"
+            size="sm"
+            label="Remove from archives"
             onClick={() => removeArchive(book.id)}
-            className="absolute top-4 right-4 p-2 rounded-lg bg-ink-800 hover:bg-red-900/50 text-ink-400 hover:text-red-400 transition-colors"
-            title="Remove from archives"
-          >
-            <Trash2 size={16} />
-          </button>
+            className="absolute top-4 right-4"
+          />
         </div>
       ))}
     </div>

@@ -384,7 +384,7 @@ export default function FloatingToolbar() {
           <TooltipButton
             label="Create"
             onClick={() => setShowWriteMenu(!showWriteMenu)}
-            className="w-12 h-12 rounded-full bg-green-600 text-ink-950 flex items-center justify-center shadow-lg hover:bg-green-500 transition-all"
+            className="w-10 h-10 rounded-full bg-ink-800 text-ink-400 flex items-center justify-center shadow-lg hover:border-green-600 hover:text-green-500 transition-all hover:scale-110"
           >
             <PenTool size={18} />
           </TooltipButton>
@@ -660,7 +660,7 @@ export default function FloatingToolbar() {
             label={post.isAppreciated ? 'Appreciated' : 'Appreciate'}
             onClick={handleAppreciate}
             className={`w-10 h-10 rounded-full flex items-center justify-center transition-all hover:scale-110 ${post.isAppreciated
-                ? 'bg-red-500 text-white border border-red-400'
+                ? 'bg-red-500 text-white border border-red-500'
                 : 'bg-ink-800 border border-ink-700 text-ink-400 hover:text-red-400 hover:border-red-500'
               }`}
           >
