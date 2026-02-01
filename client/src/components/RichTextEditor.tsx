@@ -7,6 +7,7 @@ import Underline from '@tiptap/extension-underline';
 import TextStyle from '@tiptap/extension-text-style';
 import FontFamily from '@tiptap/extension-font-family';
 import Color from '@tiptap/extension-color';
+import Link from '@tiptap/extension-link';
 import {
   Bold,
   Italic,
@@ -26,8 +27,10 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Link as LinkIcon,
+  Unlink,
 } from 'lucide-react';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 
 const fontFamilies = [
   { name: 'Classic', value: 'Playfair Display' },
@@ -86,6 +89,12 @@ export default function RichTextEditor({
       TextStyle,
       FontFamily,
       Color,
+      Link.configure({
+        openOnClick: false,
+        HTMLAttributes: {
+          class: 'text-gold-500 underline hover:text-gold-400',
+        },
+      }),
     ],
     content,
     onUpdate: ({ editor }) => {
@@ -106,6 +115,38 @@ export default function RichTextEditor({
     },
     [editor]
   );
+
+  const [showLinkInput, setShowLinkInput] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+
+  const handleSetLink = useCallback(() => {
+    if (!editor) return;
+
+    // Get current link if any
+    const previousUrl = editor.getAttributes('link').href || '';
+    setLinkUrl(previousUrl);
+    setShowLinkInput(true);
+  }, [editor]);
+
+  const handleLinkSubmit = useCallback(() => {
+    if (!editor) return;
+
+    if (linkUrl === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run();
+    } else {
+      // Ensure URL has protocol
+      const url = linkUrl.match(/^https?:\/\//) ? linkUrl : `https://${linkUrl}`;
+      editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    }
+
+    setShowLinkInput(false);
+    setLinkUrl('');
+  }, [editor, linkUrl]);
+
+  const handleRemoveLink = useCallback(() => {
+    if (!editor) return;
+    editor.chain().focus().extendMarkRange('link').unsetLink().run();
+  }, [editor]);
 
   if (!editor) {
     return null;
@@ -234,6 +275,63 @@ export default function RichTextEditor({
           >
             <Highlighter size={18} />
           </ToolbarButton>
+
+          <div className="w-px h-6 bg-ink-600 mx-1" />
+
+          {/* Link */}
+          <div className="relative">
+            <ToolbarButton
+              onClick={handleSetLink}
+              isActive={editor.isActive('link')}
+              title="Add Link"
+            >
+              <LinkIcon size={18} />
+            </ToolbarButton>
+            {showLinkInput && (
+              <div className="absolute top-full left-0 mt-1 z-10 bg-ink-800 border border-ink-600 rounded-lg p-2 shadow-lg flex items-center gap-2">
+                <input
+                  type="text"
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleLinkSubmit();
+                    } else if (e.key === 'Escape') {
+                      setShowLinkInput(false);
+                      setLinkUrl('');
+                    }
+                  }}
+                  placeholder="https://example.com"
+                  className="px-2 py-1 text-sm bg-ink-900 border border-ink-600 rounded text-ink-200 w-48 focus:outline-none focus:border-gold-600"
+                  autoFocus
+                />
+                <button
+                  onClick={handleLinkSubmit}
+                  className="px-2 py-1 text-sm bg-gold-600 text-ink-950 rounded hover:bg-gold-500"
+                >
+                  {linkUrl ? 'Set' : 'Remove'}
+                </button>
+                <button
+                  onClick={() => {
+                    setShowLinkInput(false);
+                    setLinkUrl('');
+                  }}
+                  className="px-2 py-1 text-sm text-ink-400 hover:text-ink-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+          {editor.isActive('link') && (
+            <ToolbarButton
+              onClick={handleRemoveLink}
+              title="Remove Link"
+            >
+              <Unlink size={18} />
+            </ToolbarButton>
+          )}
 
           <div className="w-px h-6 bg-ink-600 mx-1" />
 

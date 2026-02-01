@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { UserPlus, UserMinus, Lock, Type, FileText, BookOpen, Heart } from 'lucide-react';
 import PostCard from '../components/PostCard';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import {
   userApi,
   postApi,
@@ -165,29 +166,7 @@ export default function Profile() {
   };
 
   if (loading) {
-    return (
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="animate-pulse">
-          {/* Header skeleton */}
-          <div className="flex flex-col items-center mb-12">
-            <div className="w-28 h-28 rounded-full bg-ink-800 mb-6" />
-            <div className="h-8 w-48 bg-ink-800 rounded mb-3" />
-            <div className="h-5 w-32 bg-ink-800 rounded mb-6" />
-            <div className="flex gap-8">
-              <div className="h-4 w-20 bg-ink-800 rounded" />
-              <div className="h-4 w-20 bg-ink-800 rounded" />
-              <div className="h-4 w-20 bg-ink-800 rounded" />
-            </div>
-          </div>
-          {/* Posts skeleton */}
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-40 bg-ink-800/50 rounded-xl" />
-            ))}
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton variant="profile" />;
   }
 
   if (error) {

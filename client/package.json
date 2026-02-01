@@ -18,6 +18,7 @@
     "@tiptap/extension-font-family": "^2.6.6",
     "@tiptap/extension-heading": "^2.6.6",
     "@tiptap/extension-highlight": "^2.6.6",
+    "@tiptap/extension-link": "^2.27.2",
     "@tiptap/extension-placeholder": "^2.6.6",
     "@tiptap/extension-text-align": "^2.6.6",
     "@tiptap/extension-text-style": "^2.6.6",

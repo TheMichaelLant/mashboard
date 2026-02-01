@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import PostCard from '../components/PostCard';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import { feedApi, bookmarkApi } from '../services/api';
 import type { Post } from '../types';
 
@@ -68,27 +69,7 @@ export default function Feed() {
   };
 
   if (loading) {
-    return (
-      <div className="snap-container">
-        <div className="snap-item flex items-center justify-center">
-          <div className="max-w-3xl w-full px-8 animate-pulse">
-            <div className="h-16 bg-ink-800 rounded w-3/4 mb-6" />
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-12 h-12 rounded-full bg-ink-800" />
-              <div className="space-y-2">
-                <div className="h-4 bg-ink-800 rounded w-40" />
-                <div className="h-3 bg-ink-800 rounded w-32" />
-              </div>
-            </div>
-            <div className="space-y-3">
-              <div className="h-4 bg-ink-800 rounded w-full" />
-              <div className="h-4 bg-ink-800 rounded w-5/6" />
-              <div className="h-4 bg-ink-800 rounded w-4/6" />
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton variant="feed" />;
   }
 
   if (posts.length === 0) {

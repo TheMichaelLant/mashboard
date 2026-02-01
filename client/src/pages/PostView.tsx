@@ -22,10 +22,12 @@ import {
   bookmarkApi,
   highlightApi,
   subscriptionApi,
+  followApi,
 } from '../services/api';
 import type { Post, Highlight } from '../types';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
 import { useHighlightDisplay } from '../contexts/HighlightDisplayContext';
+import LoadingSkeleton from '../components/LoadingSkeleton';
 import {
   processHighlights,
   findOverlapOrAdjacent,
@@ -148,6 +150,8 @@ export default function PostView() {
   const [isDragging, setIsDragging] = useState(false);
   const [hoveredHighlightId, setHoveredHighlightId] = useState<number | null>(null);
   const [deleteButtonPosition, setDeleteButtonPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [isFollowLoading, setIsFollowLoading] = useState(false);
   const highlightMenuRef = useRef<HTMLDivElement>(null);
 
   // Calculate current content (moved early for use in callbacks)
@@ -177,6 +181,20 @@ export default function PostView() {
     };
     fetchPost();
   }, [id, isSignedIn]);
+
+  // Check if user is following the author
+  useEffect(() => {
+    const checkFollowStatus = async () => {
+      if (!post?.authorId || !isSignedIn || userId === post.authorId) return;
+      try {
+        const { isFollowing: following } = await followApi.checkFollowing(post.authorId);
+        setIsFollowing(following);
+      } catch (error) {
+        console.error('Failed to check follow status:', error);
+      }
+    };
+    checkFollowStatus();
+  }, [post?.authorId, isSignedIn, userId]);
 
   // Listen for highlights created from FloatingToolbar
   useEffect(() => {
@@ -918,6 +936,24 @@ export default function PostView() {
     }
   };
 
+  const handleFollow = async () => {
+    if (!post || !isSignedIn || isFollowLoading) return;
+    setIsFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await followApi.unfollow(post.authorId);
+        setIsFollowing(false);
+      } else {
+        await followApi.follow(post.authorId);
+        setIsFollowing(true);
+      }
+    } catch (error) {
+      console.error('Failed to toggle follow:', error);
+    } finally {
+      setIsFollowLoading(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!post) return;
     if (window.confirm('Are you sure you want to delete this post?')) {
@@ -951,18 +987,28 @@ export default function PostView() {
     });
   }, [currentContent, highlights, showHighlightsInContent]);
 
+  // Calculate reading time for article/page/book types (200 words per minute average)
+  const readingTime = useMemo(() => {
+    if (!post || post.type === 'line') return null;
+
+    let totalContent = '';
+    if (post.type === 'book' && post.chapters?.length) {
+      // For books, calculate based on all chapters
+      totalContent = post.chapters.map(ch => ch.content || '').join(' ');
+    } else {
+      totalContent = post.content || '';
+    }
+
+    // Strip HTML tags and count words
+    const stripped = totalContent.replace(/<[^>]*>/g, '');
+    const words = stripped.split(/\s+/).filter(w => w.length > 0).length;
+    const minutes = Math.ceil(words / 200);
+
+    return minutes === 1 ? '1 min read' : `${minutes} min read`;
+  }, [post]);
+
   if (loading) {
-    return (
-      <div className="max-w-3xl mx-auto px-8 py-12 animate-pulse">
-        <div className="h-12 bg-ink-700 rounded w-3/4 mb-4" />
-        <div className="h-4 bg-ink-700 rounded w-1/4 mb-8" />
-        <div className="space-y-3">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-4 bg-ink-700 rounded" />
-          ))}
-        </div>
-      </div>
-    );
+    return <LoadingSkeleton variant="post" />;
   }
 
   if (!post) {
@@ -1021,18 +1067,39 @@ export default function PostView() {
               </div>
             )}
             <div>
-              <Link
-                to={`/@${post.author?.username}`}
-                className="font-medium text-ink-200 hover:text-gold-600 transition-colors"
-              >
-                {post.author?.displayName}
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  to={`/@${post.author?.username}`}
+                  className="font-medium text-ink-200 hover:text-gold-600 transition-colors"
+                >
+                  {post.author?.displayName}
+                </Link>
+                {isSignedIn && !isOwner && (
+                  <button
+                    onClick={handleFollow}
+                    disabled={isFollowLoading}
+                    className={`text-sm px-3 py-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                      isFollowing
+                        ? 'border-ink-600 text-ink-400 hover:border-red-500 hover:text-red-400'
+                        : 'border-gold-600 text-gold-500 hover:bg-gold-600 hover:text-ink-900'
+                    }`}
+                  >
+                    {isFollowLoading ? '...' : isFollowing ? 'Following' : 'Follow'}
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-ink-500">
                 {new Date(post.createdAt).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric',
                 })}
+                {readingTime && (
+                  <>
+                    <span className="mx-2">·</span>
+                    <span>{readingTime}</span>
+                  </>
+                )}
               </p>
             </div>
           </div>
