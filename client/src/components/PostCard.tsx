@@ -127,7 +127,7 @@ export default function PostCard({ post, variant = 'feed', onBookmark }: PostCar
 
   // Feed variant (snap-scroll)
   return (
-    <article className="snap-item flex items-center justify-center px-8 py-16">
+    <article data-scroll-item className="flex items-center justify-center px-8 py-16">
       <div className="max-w-3xl w-full">
         {/* Title */}
         {post.title && (

@@ -179,7 +179,7 @@ export default function FloatingToolbar() {
   }, [showWriteMenu, showHighlightTools, showAITools, showSummary, showSuggestions]);
 
   const scrollToNext = () => {
-    const snapContainer = document.querySelector('.snap-container');
+    const snapContainer = document.querySelector('[data-scroll="snap"]');
     if (snapContainer) {
       snapContainer.scrollBy({ top: window.innerHeight, behavior: 'smooth' });
     } else {
@@ -188,7 +188,7 @@ export default function FloatingToolbar() {
   };
 
   const scrollToPrevious = () => {
-    const snapContainer = document.querySelector('.snap-container');
+    const snapContainer = document.querySelector('[data-scroll="snap"]');
     if (snapContainer) {
       snapContainer.scrollBy({ top: -window.innerHeight, behavior: 'smooth' });
     } else {
@@ -197,8 +197,8 @@ export default function FloatingToolbar() {
   };
 
   const scrollToTop = () => {
-    // Try to scroll the snap-container first (for feed page)
-    const snapContainer = document.querySelector('.snap-container');
+    // Try to scroll the snap scroll container first (for feed page)
+    const snapContainer = document.querySelector('[data-scroll="snap"]');
     if (snapContainer) {
       snapContainer.scrollTo({ top: 0, behavior: 'smooth' });
     }

@@ -1,14 +1,31 @@
 import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { useUser } from '@clerk/clerk-react';
-import { User, CreditCard, Shield, Save, Check } from 'lucide-react';
+import { User, CreditCard, Shield } from 'lucide-react';
 import { userApi } from '../services/api';
+import PageHeader from '../components/PageHeader';
+import Tabs from '../components/Tabs';
+import Switch from '../components/Switch';
+import ProfileTab from '../components/settings/ProfileTab';
+import CreatorTab from '../components/settings/CreatorTab';
+import AccountTab from '../components/settings/AccountTab';
+import { SiteMap, SettingsRoute } from '@/types/SiteMapEnum';
 import type { User as UserType } from '../types';
 
-type Tab = 'profile' | 'subscriptions' | 'creator';
+const TABS = [
+  { value: SiteMap.SETTINGS.PROFILE, to: SiteMap.SETTINGS.PROFILE, icon: User, label: 'Profile' },
+  { value: SiteMap.SETTINGS.CREATOR, to: SiteMap.SETTINGS.CREATOR, icon: CreditCard, label: 'Creator' },
+  { value: SiteMap.SETTINGS.SUBSCRIPTIONS, to: SiteMap.SETTINGS.SUBSCRIPTIONS, icon: Shield, label: 'Account' },
+];
 
 export default function Settings() {
+  const { tab } = useParams<{ tab?: string }>();
+  const tabPath = `/settings/${tab ?? 'profile'}` as SettingsRoute;
+  const activeTab: SettingsRoute = Object.values(SiteMap.SETTINGS).includes(tabPath)
+    ? tabPath
+    : SiteMap.SETTINGS.PROFILE;
+
   const { user: clerkUser } = useUser();
-  const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [profile, setProfile] = useState<UserType | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -127,261 +144,41 @@ export default function Settings() {
 
   return (
     <div className="max-w-3xl mx-auto px-8 py-12">
-      <h1 className="text-4xl font-display font-bold text-ink-100 mb-8">
-        Settings
-      </h1>
+      <PageHeader title="Settings" />
+      <Tabs.Navigation tabs={TABS} activeTab={activeTab} />
 
-      {/* Tabs */}
-      <div className="flex items-center space-x-1 border-b border-ink-700 mb-8">
-        <TabButton
-          active={activeTab === 'profile'}
-          onClick={() => setActiveTab('profile')}
-          icon={User}
-          label="Profile"
-        />
-        <TabButton
-          active={activeTab === 'creator'}
-          onClick={() => setActiveTab('creator')}
-          icon={CreditCard}
-          label="Creator"
-        />
-        <TabButton
-          active={activeTab === 'subscriptions'}
-          onClick={() => setActiveTab('subscriptions')}
-          icon={Shield}
-          label="Account"
-        />
-      </div>
-
-      {/* Profile Settings */}
-      {activeTab === 'profile' && (
-        <div className="card p-6 space-y-6">
-          <div className="flex items-center space-x-4">
-            {clerkUser?.imageUrl ? (
-              <img
-                src={clerkUser.imageUrl}
-                alt="Avatar"
-                className="w-20 h-20 rounded-full object-cover"
-              />
-            ) : (
-              <div className="w-20 h-20 rounded-full bg-ink-700 flex items-center justify-center">
-                <span className="text-ink-400 font-bold text-2xl">
-                  {displayName.charAt(0) || '?'}
-                </span>
-              </div>
-            )}
-            <div>
-              <p className="text-sm text-ink-400">
-                Profile picture is managed through Clerk
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-ink-300 block mb-2">
-              Username
-            </label>
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-500">
-                @
-              </span>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => {
-                  setUsername(e.target.value);
-                  checkUsername(e.target.value);
-                }}
-                className={`input pl-8 ${usernameError ? 'border-red-500' : ''}`}
-                placeholder="username"
-              />
-            </div>
-            {usernameError && (
-              <p className="text-sm text-red-400 mt-1">{usernameError}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-ink-300 block mb-2">
-              Display Name
-            </label>
-            <input
-              type="text"
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              className="input"
-              placeholder="Your name"
-            />
-          </div>
-
-          <div>
-            <label className="text-sm font-medium text-ink-300 block mb-2">
-              Bio
-            </label>
-            <textarea
-              value={bio}
-              onChange={(e) => setBio(e.target.value)}
-              className="input min-h-[100px]"
-              placeholder="Tell us about yourself..."
-            />
-          </div>
-
-          <button
-            onClick={handleSaveProfile}
-            disabled={saving || !!usernameError}
-            className="btn btn-primary disabled:opacity-50"
-          >
-            {saved ? (
-              <>
-                <Check size={18} className="mr-2" />
-                Saved!
-              </>
-            ) : (
-              <>
-                <Save size={18} className="mr-2" />
-                {saving ? 'Saving...' : 'Save Profile'}
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Creator Settings */}
-      {activeTab === 'creator' && (
-        <div className="card p-6 space-y-6">
-          <div>
-            <h2 className="text-xl font-heading font-semibold text-ink-100 mb-2">
-              Creator Settings
-            </h2>
-            <p className="text-ink-400">
-              Enable subscriptions to monetize your content. Subscribers get access to your paid posts.
-            </p>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div>
-              <label className="font-medium text-ink-200">
-                Accept Subscriptions
-              </label>
-              <p className="text-sm text-ink-400">
-                Allow readers to subscribe to your content
-              </p>
-            </div>
-            <button
-              onClick={() => setAcceptsSubscriptions(!acceptsSubscriptions)}
-              className={`w-12 h-6 rounded-full transition-colors ${
-                acceptsSubscriptions ? 'bg-gold-600' : 'bg-ink-600'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full bg-white shadow transition-transform ${
-                  acceptsSubscriptions ? 'translate-x-6' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-
-          {acceptsSubscriptions && (
-            <div>
-              <label className="text-sm font-medium text-ink-300 block mb-2">
-                Monthly Subscription Price ($)
-              </label>
-              <input
-                type="number"
-                value={subscriptionPrice}
-                onChange={(e) => setSubscriptionPrice(parseFloat(e.target.value) || 0)}
-                className="input w-32"
-                min="0"
-                step="0.01"
-              />
-              <p className="text-sm text-ink-500 mt-1">
-                Set to 0 for free subscriptions (supporters only)
-              </p>
-            </div>
-          )}
-
-          <button
-            onClick={handleSaveCreatorSettings}
-            disabled={saving}
-            className="btn btn-primary disabled:opacity-50"
-          >
-            {saved ? (
-              <>
-                <Check size={18} className="mr-2" />
-                Saved!
-              </>
-            ) : (
-              <>
-                <Save size={18} className="mr-2" />
-                {saving ? 'Saving...' : 'Save Settings'}
-              </>
-            )}
-          </button>
-        </div>
-      )}
-
-      {/* Account Settings */}
-      {activeTab === 'subscriptions' && (
-        <div className="card p-6 space-y-6">
-          <div>
-            <h2 className="text-xl font-heading font-semibold text-ink-100 mb-2">
-              Account Settings
-            </h2>
-            <p className="text-ink-400">
-              Manage your account security and preferences.
-            </p>
-          </div>
-
-          <div className="border-t border-ink-700 pt-6">
-            <h3 className="font-medium text-ink-200 mb-2">Email</h3>
-            <p className="text-ink-100">{clerkUser?.primaryEmailAddress?.emailAddress}</p>
-            <p className="text-sm text-ink-500 mt-1">
-              Managed through Clerk authentication
-            </p>
-          </div>
-
-          <div className="border-t border-ink-700 pt-6">
-            <h3 className="font-medium text-ink-200 mb-2">Security</h3>
-            <p className="text-sm text-ink-400">
-              Account security settings are managed through Clerk.
-              Click the user menu in the top right to access security settings.
-            </p>
-          </div>
-
-          <div className="border-t border-ink-700 pt-6">
-            <h3 className="font-medium text-red-400 mb-2">Danger Zone</h3>
-            <p className="text-sm text-ink-400 mb-4">
-              Deleting your account will remove all your posts, bookmarks, and data permanently.
-            </p>
-            <button className="btn bg-red-600 text-white hover:bg-red-700">
-              Delete Account
-            </button>
-          </div>
-        </div>
-      )}
+      <Switch expression={activeTab}>
+        <Switch.CASE value={SiteMap.SETTINGS.PROFILE}>
+          <ProfileTab
+            clerkUser={clerkUser}
+            username={username}
+            setUsername={setUsername}
+            displayName={displayName}
+            setDisplayName={setDisplayName}
+            bio={bio}
+            setBio={setBio}
+            usernameError={usernameError}
+            checkUsername={checkUsername}
+            saving={saving}
+            saved={saved}
+            onSave={handleSaveProfile}
+          />
+        </Switch.CASE>
+        <Switch.CASE value={SiteMap.SETTINGS.CREATOR}>
+          <CreatorTab
+            acceptsSubscriptions={acceptsSubscriptions}
+            setAcceptsSubscriptions={setAcceptsSubscriptions}
+            subscriptionPrice={subscriptionPrice}
+            setSubscriptionPrice={setSubscriptionPrice}
+            saving={saving}
+            saved={saved}
+            onSave={handleSaveCreatorSettings}
+          />
+        </Switch.CASE>
+        <Switch.CASE value={SiteMap.SETTINGS.SUBSCRIPTIONS}>
+          <AccountTab email={clerkUser?.primaryEmailAddress?.emailAddress} />
+        </Switch.CASE>
+      </Switch>
     </div>
-  );
-}
-
-interface TabButtonProps {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ElementType;
-  label: string;
-}
-
-function TabButton({ active, onClick, icon: Icon, label }: TabButtonProps) {
-  return (
-    <button
-      onClick={onClick}
-      className={`flex items-center space-x-2 px-4 py-3 border-b-2 transition-colors ${
-        active
-          ? 'border-gold-600 text-gold-600'
-          : 'border-transparent text-ink-400 hover:text-ink-200'
-      }`}
-    >
-      <Icon size={18} />
-      <span className="font-medium">{label}</span>
-    </button>
   );
 }

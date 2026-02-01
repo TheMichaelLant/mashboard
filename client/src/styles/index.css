@@ -61,13 +61,13 @@
   }
 
   /* Snap scroll container */
-  .snap-container {
+  [data-scroll="snap"] {
     @apply h-screen overflow-y-scroll;
     scroll-snap-type: y mandatory;
     -webkit-overflow-scrolling: touch;
   }
 
-  .snap-item {
+  [data-scroll-item] {
     @apply min-h-screen;
     scroll-snap-align: center;
     scroll-snap-stop: always;

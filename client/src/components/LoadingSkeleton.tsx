@@ -2,6 +2,14 @@ interface SkeletonProps {
   className?: string;
 }
 
+export enum SkeletonType { 
+  POST = 'post',
+  FEED = 'feed',
+  PROFILE = 'profile',
+  CARD = 'card',
+  CARDS = 'cards',
+}
+
 // Primitive building blocks
 export function SkeletonLine({ className = '' }: SkeletonProps) {
   return <div className={`h-4 bg-ink-700 rounded ${className}`} />;
@@ -17,23 +25,23 @@ export function SkeletonBlock({ className = '' }: SkeletonProps) {
 
 // Preset variants
 interface LoadingSkeletonProps {
-  variant?: 'post' | 'feed' | 'profile' | 'card' | 'cards';
+  variant?: SkeletonType;
   count?: number;
   className?: string;
 }
 
 export default function LoadingSkeleton({
-  variant = 'post',
+  variant = SkeletonType.POST,
   count = 1,
   className = '',
 }: LoadingSkeletonProps) {
   const items = Array.from({ length: count }, (_, i) => i);
 
   switch (variant) {
-    case 'feed':
+    case SkeletonType.FEED:
       return (
-        <div className={`snap-container ${className}`}>
-          <div className="snap-item flex items-center justify-center">
+        <div data-scroll="snap" className={className}>
+          <div data-scroll-item className="flex items-center justify-center">
             <div className="max-w-3xl w-full px-8 animate-pulse">
               <SkeletonBlock className="h-16 w-3/4 mb-6" />
               <div className="flex items-center gap-4 mb-6">
@@ -53,7 +61,7 @@ export default function LoadingSkeleton({
         </div>
       );
 
-    case 'post':
+    case SkeletonType.POST:
       return (
         <div className={`max-w-3xl mx-auto px-8 py-12 animate-pulse ${className}`}>
           <SkeletonBlock className="h-12 w-3/4 mb-4" />
@@ -66,7 +74,7 @@ export default function LoadingSkeleton({
         </div>
       );
 
-    case 'profile':
+    case SkeletonType.PROFILE:
       return (
         <div className={`max-w-4xl mx-auto px-4 py-12 ${className}`}>
           <div className="animate-pulse">
@@ -89,7 +97,7 @@ export default function LoadingSkeleton({
         </div>
       );
 
-    case 'card':
+    case SkeletonType.CARD:
       return (
         <div className={`card p-6 animate-pulse ${className}`}>
           <SkeletonLine className="w-3/4 mb-2" />
@@ -97,7 +105,7 @@ export default function LoadingSkeleton({
         </div>
       );
 
-    case 'cards':
+    case SkeletonType.CARDS:
       return (
         <div className={`space-y-4 ${className}`}>
           {items.map((i) => (

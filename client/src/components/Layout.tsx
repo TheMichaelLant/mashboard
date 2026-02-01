@@ -2,12 +2,13 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { SignedIn, SignedOut, useUser } from '@clerk/clerk-react';
 import { Rss, Bookmark, User, Compass } from 'lucide-react';
 import FloatingToolbar from './FloatingToolbar';
+import { SiteMap } from '@/types/SiteMapEnum';
 
 const navItems = [
-  { path: '/feed', icon: Rss, label: 'Feed', public: false },
-  { path: '/discover', icon: Compass, label: 'Discover', public: false },
-  { path: '/library', icon: Bookmark, label: 'Library', public: false },
-  { path: '/settings', icon: User, label: 'Account', public: false },
+  { path: SiteMap.FEED, icon: Rss, label: 'Feed', public: false },
+  { path: SiteMap.DISCOVER, icon: Compass, label: 'Discover', public: false },
+  { path: SiteMap.LIBRARY.ROOT, icon: Bookmark, label: 'Library', public: false },
+  { path: SiteMap.SETTINGS.ROOT, icon: User, label: 'Account', public: false },
 ];
 
 export default function Layout() {

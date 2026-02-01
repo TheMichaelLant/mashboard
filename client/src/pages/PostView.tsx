@@ -27,7 +27,7 @@ import {
 import type { Post, Highlight } from '../types';
 import { useHighlightMode } from '../contexts/HighlightModeContext';
 import { useHighlightDisplay } from '../contexts/HighlightDisplayContext';
-import LoadingSkeleton from '../components/LoadingSkeleton';
+import LoadingSkeleton, { SkeletonType } from '../components/LoadingSkeleton';
 import {
   processHighlights,
   findOverlapOrAdjacent,
@@ -1008,7 +1008,7 @@ export default function PostView() {
   }, [post]);
 
   if (loading) {
-    return <LoadingSkeleton variant="post" />;
+    return <LoadingSkeleton variant={SkeletonType.POST} />;
   }
 
   if (!post) {

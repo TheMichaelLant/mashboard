@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { UserPlus } from 'lucide-react';
 import PostCard from '../components/PostCard';
-import LoadingSkeleton from '../components/LoadingSkeleton';
+import LoadingSkeleton, { SkeletonType } from '../components/LoadingSkeleton';
 import { feedApi, bookmarkApi } from '../services/api';
 import type { Post } from '../types';
 
@@ -69,7 +69,7 @@ export default function Feed() {
   };
 
   if (loading) {
-    return <LoadingSkeleton variant="feed" />;
+    return <LoadingSkeleton variant={SkeletonType.FEED} />;
   }
 
   if (posts.length === 0) {
@@ -77,7 +77,7 @@ export default function Feed() {
   }
 
   return (
-    <div ref={containerRef} onScroll={handleScroll} className="snap-container">
+    <div ref={containerRef} onScroll={handleScroll} data-scroll="snap">
       {posts.map((post) => (
         <PostCard
           key={post.id}
@@ -91,8 +91,8 @@ export default function Feed() {
 
 function EmptyFeed() {
   return (
-    <div className="snap-container">
-      <div className="snap-item flex items-center justify-center">
+    <div data-scroll="snap">
+      <div data-scroll-item className="flex items-center justify-center">
         <div className="text-center max-w-md px-8">
           <div className="w-20 h-20 rounded-full bg-ink-800 flex items-center justify-center mx-auto mb-6">
             <UserPlus className="text-ink-500" size={36} />

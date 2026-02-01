@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { UserPlus, UserMinus, Lock, Type, FileText, BookOpen, Heart } from 'lucide-react';
 import PostCard from '../components/PostCard';
-import LoadingSkeleton from '../components/LoadingSkeleton';
+import LoadingSkeleton, { SkeletonType } from '../components/LoadingSkeleton';
 import {
   userApi,
   postApi,
@@ -166,7 +166,7 @@ export default function Profile() {
   };
 
   if (loading) {
-    return <LoadingSkeleton variant="profile" />;
+    return <LoadingSkeleton variant={SkeletonType.PROFILE} />;
   }
 
   if (error) {
